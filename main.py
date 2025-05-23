@@ -10,9 +10,9 @@ from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
 
 TOKEN = os.environ.get("TOKEN")
-NOTIFY_CHANNEL_ID = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))  # Kênh thông báo
+NOTIFY_CHANNEL_ID = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))  # Kênh thông báo 
 
-Thiết lập Google Sheets
+#Thiết lập Google Sheets
 
 SHEET_NAME = "RobloxAccounts"
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
