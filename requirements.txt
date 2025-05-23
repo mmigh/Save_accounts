@@ -2,4 +2,3 @@ discord.py
 flask
 gspread
 oauth2client
-selenium
