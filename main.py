@@ -262,13 +262,63 @@ async def generate_account(interaction: discord.Interaction, amount: int = 1, le
         if channel:
             await channel.send(f"⚙️ Đã tạo {amount} tài khoản Roblox mới:\n```{message}```")
 
+@bot.tree.command(name="bulk_status", description="♻️ Cập nhật trạng thái hàng loạt")
+async def bulk_status(interaction: discord.Interaction):
+    if not bot.accounts:
+        await interaction.response.send_message("⚠️ Không có tài khoản nào để cập nhật.", ephemeral=True)
+        return
+
+    accounts = list(bot.accounts.keys())[:25]  # Discord giới hạn SelectOption tối đa 25
+    options = [
+        discord.SelectOption(label=acc, description=bot.accounts[acc].get("note", "")[:100] or "Không có ghi chú")
+        for acc in accounts
+    ]
+
+    select = discord.ui.Select(placeholder="🔘 Chọn tài khoản cần cập nhật", options=options, min_values=1, max_values=len(options))
+
+    class StatusView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+            self.selected_accounts = []
+
+        @discord.ui.button(label="🔵 Online", style=discord.ButtonStyle.success)
+        async def set_online(self, interaction_btn: discord.Interaction, button: discord.ui.Button):
+            if not self.selected_accounts:
+                await interaction_btn.response.send_message("⚠️ Bạn chưa chọn tài khoản nào.", ephemeral=True)
+                return
+            for acc in self.selected_accounts:
+                bot.accounts[acc]["status"] = "online"
+                update_status(acc, "online")
+            await interaction_btn.response.send_message(f"✅ Đã cập nhật trạng thái **online** cho {len(self.selected_accounts)} tài khoản.", ephemeral=True)
+
+        @discord.ui.button(label="🔴 Offline", style=discord.ButtonStyle.danger)
+        async def set_offline(self, interaction_btn: discord.Interaction, button: discord.ui.Button):
+            if not self.selected_accounts:
+                await interaction_btn.response.send_message("⚠️ Bạn chưa chọn tài khoản nào.", ephemeral=True)
+                return
+            for acc in self.selected_accounts:
+                bot.accounts[acc]["status"] = "offline"
+                update_status(acc, "offline")
+            await interaction_btn.response.send_message(f"✅ Đã cập nhật trạng thái **offline** cho {len(self.selected_accounts)} tài khoản.", ephemeral=True)
+
+        @select.callback
+        async def select_callback(select_interaction: discord.Interaction):
+            self.selected_accounts = select.values
+            await select_interaction.response.send_message(f"📌 Đã chọn {len(self.selected_accounts)} tài khoản.", ephemeral=True)
+
+    view = StatusView()
+    view.add_item(select)
+
+    embed = discord.Embed(
+        title="♻️ Cập nhật trạng thái hàng loạt",
+        description="Chọn các tài khoản từ danh sách bên dưới, sau đó bấm nút **Online** hoặc **Offline** để cập nhật trạng thái.",
+        color=discord.Color.blue()
+    )
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
 @bot.event
 async def on_ready():
     print(f"Bot đã đăng nhập như {bot.user} (ID: {bot.user.id})")
-    if NOTIFY_CHANNEL_ID:
-        channel = bot.get_channel(NOTIFY_CHANNEL_ID)
-        if channel:
-            await channel.send("🤖 Bot đã khởi động và sẵn sàng hoạt động!")
 
 keep_alive()
 bot.run(TOKEN)
