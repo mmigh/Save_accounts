@@ -244,6 +244,75 @@ async def account_autocomplete(interaction: discord.Interaction, current: str):
         for acc in bot.accounts.keys()
         if current_lower in acc.lower()
     ][:25]
+    
+def read_accounts():
+    accounts = {}
+    records = sheet.get_all_records()
+    for record in records:
+        accounts[record['Account']] = {
+            'note': record.get('Note', ''),
+            'status': record.get('Status', 'offline').lower()
+        }
+    return accounts
+
+def save_account(account, note, status="offline"):
+    sheet.append_row([account, note, status])
+
+def update_note(account, new_note):
+    cell = sheet.find(account)
+    if cell:
+        sheet.update_cell(cell.row, 2, new_note)
+
+def update_status(account, new_status):
+    cell = sheet.find(account)
+    if cell:
+        sheet.update_cell(cell.row, 3, new_status)
+
+# Gửi bảng embed trạng thái
+@bot.tree.command(name="status_board", description="📊 Gửi bảng trạng thái tài khoản lên kênh")
+async def status_board(interaction: discord.Interaction):
+    if not bot.accounts:
+        await interaction.response.send_message("⚠️ Không có tài khoản nào để hiển thị.", ephemeral=True)
+        return
+
+    embed = discord.Embed(title="📋 Trạng thái tài khoản Roblox", color=discord.Color.blurple())
+    status_map = {"farming": "🟢 Đang cày", "banned": "🔴 Banned", "offline": "⚪ Offline"}
+
+    for acc, info in bot.accounts.items():
+        status = info.get("status", "offline")
+        display = status_map.get(status.lower(), "⚪ Offline")
+        embed.add_field(name=acc, value=f"Trạng thái: {display}", inline=False)
+
+    # Dropdown chọn tài khoản và chỉnh trạng thái
+    options = [discord.SelectOption(label=acc, value=acc) for acc in list(bot.accounts.keys())[:25]]
+    select = discord.ui.Select(placeholder="Chọn tài khoản để cập nhật trạng thái", options=options)
+
+    class StatusView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=None)
+            self.selected_account = None
+
+        @discord.ui.select(placeholder="Chọn trạng thái mới", options=[
+            discord.SelectOption(label="🟢 Đang cày", value="farming"),
+            discord.SelectOption(label="🔴 Banned", value="banned"),
+            discord.SelectOption(label="⚪ Offline", value="offline")
+        ])
+        async def status_select(self, interaction2: discord.Interaction, select_status: discord.ui.Select):
+            if not self.selected_account:
+                await interaction2.response.send_message("⚠️ Vui lòng chọn tài khoản trước!", ephemeral=True)
+                return
+            new_status = select_status.values[0]
+            bot.accounts[self.selected_account]["status"] = new_status
+            update_status(self.selected_account, new_status)
+            await interaction2.response.send_message(f"✅ Đã cập nhật {self.selected_account} thành {new_status}", ephemeral=True)
+
+        @discord.ui.select(placeholder="Chọn tài khoản để cập nhật trạng thái", options=options)
+        async def account_select(self, interaction3: discord.Interaction, select_account: discord.ui.Select):
+            self.selected_account = select_account.values[0]
+            await interaction3.response.send_message(f"🔄 Đã chọn **{self.selected_account}**. Giờ hãy chọn trạng thái.", ephemeral=True)
+
+    view = StatusView()
+    await interaction.response.send_message(embed=embed, view=view)
 
 @bot.event
 async def on_ready():
