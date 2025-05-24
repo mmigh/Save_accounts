@@ -9,17 +9,22 @@ import random
 import string
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from keep_alive import keep_alive
+from keep_alive import keep_alive  # Giữ bot luôn chạy (dùng trên hosting như Replit)
 
 TOKEN = os.environ.get("TOKEN")
 NOTIFY_CHANNEL_ID = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))
 
 # Google Sheets setup
 SHEET_NAME = "RobloxAccounts"
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive"
+]
+
 cred_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
 if not cred_json:
     raise ValueError("Thiếu biến môi trường GOOGLE_CREDENTIALS_JSON!")
+
 cred_dict = json.loads(cred_json)
 creds = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, scope)
 client = gspread.authorize(creds)
@@ -29,11 +34,14 @@ def read_accounts():
     accounts = {}
     records = sheet.get_all_records()
     for record in records:
-        accounts[record['Account']] = {'note': record.get('Note', '')}
+        accounts[record['Account']] = {
+            'note': record.get('Note', ''),
+            'status': record.get('Status', 'offline').lower()
+        }
     return accounts
 
-def save_account(account, note):
-    sheet.append_row([account, note])
+def save_account(account, note, status="offline"):
+    sheet.append_row([account, note, status])
 
 def delete_account(account):
     cell = sheet.find(account)
@@ -44,6 +52,11 @@ def update_note(account, new_note):
     cell = sheet.find(account)
     if cell:
         sheet.update_cell(cell.row, 2, new_note)
+
+def update_status(account, new_status):
+    cell = sheet.find(account)
+    if cell:
+        sheet.update_cell(cell.row, 3, new_status)
 
 def generate_roblox_username(length=12):
     if length < 3 or length > 20:
@@ -84,9 +97,11 @@ async def add_account(interaction: discord.Interaction, account: str, note: str 
     if account in bot.accounts:
         await interaction.response.send_message(f"⚠️ Tài khoản {account} đã tồn tại!", ephemeral=True)
         return
-    bot.accounts[account] = {"note": note}
+
+    bot.accounts[account] = {"note": note, "status": "offline"}
     save_account(account, note)
     await interaction.response.send_message(f"✅ Đã thêm: {account} với ghi chú: {note}", ephemeral=True)
+
     if NOTIFY_CHANNEL_ID:
         channel = bot.get_channel(NOTIFY_CHANNEL_ID)
         if channel:
@@ -110,7 +125,9 @@ async def show_accounts(interaction: discord.Interaction):
     async def select_callback(interaction_select: discord.Interaction):
         selected = select.values[0]
         note = bot.accounts[selected].get("note", "Không có ghi chú")
-        await interaction_select.response.send_message(f"🧾 **Tài khoản:** `{selected}`\n📝 **Ghi chú:** {note}", ephemeral=True)
+        await interaction_select.response.send_message(
+            f"🧾 **Tài khoản:** `{selected}`\n📝 **Ghi chú:** {note}", ephemeral=True
+        )
 
     select.callback = select_callback
     view = discord.ui.View()
@@ -159,9 +176,9 @@ async def export_accounts(interaction: discord.Interaction):
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Account", "Note"])
+    writer.writerow(["Account", "Note", "Status"])
     for acc, info in bot.accounts.items():
-        writer.writerow([acc, info.get("note", "")])
+        writer.writerow([acc, info.get("note", ""), info.get("status", "offline")])
     csv_file = discord.File(fp=io.BytesIO(output.getvalue().encode()), filename="accounts.csv")
 
     await interaction.response.send_message("📎 Đây là danh sách tài khoản:", files=[json_file, csv_file], ephemeral=True)
@@ -172,7 +189,7 @@ async def backup_accounts(interaction: discord.Interaction):
         await interaction.response.send_message("⚠️ Không có tài khoản để sao lưu.", ephemeral=True)
         return
 
-    lines = [f"{acc} | {info.get('note', '')}" for acc, info in bot.accounts.items()]
+    lines = [f"{acc} | {info.get('note', '')} | {info.get('status', 'offline')}" for acc, info in bot.accounts.items()]
     content = "\n".join(lines)
     file = discord.File(fp=io.BytesIO(content.encode()), filename="accounts_backup.txt")
     await interaction.response.send_message("🗂️ Đây là bản sao lưu:", file=file, ephemeral=True)
@@ -184,7 +201,8 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
         await interaction.response.send_message("⚠️ Vui lòng gửi file .txt hợp lệ!", ephemeral=True)
         return
 
-    lines = [f"{acc} | {info.get('note', '')}" for acc, info in bot.accounts.items()]
+    # Backup hiện tại trước khi restore
+    lines = [f"{acc} | {info.get('note', '')} | {info.get('status', 'offline')}" for acc, info in bot.accounts.items()]
     backup_content = "\n".join(lines)
     backup_file = discord.File(fp=io.BytesIO(backup_content.encode()), filename="accounts_backup_before_restore.txt")
     await interaction.response.send_message("🛡️ Đây là bản sao lưu hiện tại trước khi khôi phục dữ liệu:", file=backup_file, ephemeral=True)
@@ -198,32 +216,42 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
         return
 
     sheet.clear()
-    sheet.append_row(["Account", "Note"])
+    sheet.append_row(["Account", "Note", "Status"])
     bot.accounts.clear()
 
     for line in lines:
-        account, note = map(str.strip, line.split("|", 1))
+        parts = list(map(str.strip, line.split("|")))
+        if len(parts) >= 3:
+            account, note, status = parts[0], parts[1], parts[2]
+        elif len(parts) == 2:
+            account, note = parts[0], parts[1]
+            status = "offline"
+        else:
+            continue
         if account:
-            sheet.append_row([account, note])
-            bot.accounts[account] = {"note": note}
+            sheet.append_row([account, note, status])
+            bot.accounts[account] = {"note": note, "status": status}
 
     await interaction.followup.send(f"✅ Đã khôi phục **{len(lines)}** tài khoản từ file!", ephemeral=True)
 
 @bot.tree.command(name="generate_account", description="⚙️ Tạo tài khoản Roblox ngẫu nhiên và lưu lại")
-@app_commands.describe(amount="Số lượng tài khoản muốn tạo (1–20)")
-async def generate_account(interaction: discord.Interaction, amount: int):
+@app_commands.describe(amount="Số lượng tài khoản muốn tạo (1–20)", length="Độ dài tên tài khoản (3–20 ký tự)")
+async def generate_account(interaction: discord.Interaction, amount: int = 1, length: int = 12):
     if amount < 1 or amount > 20:
         await interaction.response.send_message("⚠️ Số lượng phải từ 1 đến 20.", ephemeral=True)
+        return
+    if length < 3 or length > 20:
+        await interaction.response.send_message("⚠️ Độ dài tên tài khoản phải từ 3 đến 20.", ephemeral=True)
         return
 
     generated = []
     for _ in range(amount):
         while True:
-            username = generate_roblox_username()
+            username = generate_roblox_username(length)
             if username not in bot.accounts:
                 break
-        bot.accounts[username] = {"note": "Generated"}
-        save_account(username, "Generated")
+        bot.accounts[username] = {"note": "Generated", "status": "offline"}
+        save_account(username, "Generated", "offline")
         generated.append(username)
 
     message = "\n".join(generated)
@@ -232,92 +260,15 @@ async def generate_account(interaction: discord.Interaction, amount: int):
     if NOTIFY_CHANNEL_ID:
         channel = bot.get_channel(NOTIFY_CHANNEL_ID)
         if channel:
-            await channel.send(f"⚙️ Đã tạo {amount} tài khoản mới:\n```{message}```")
-
-@remove_account.autocomplete("account")
-@edit_note.autocomplete("account")
-@add_account.autocomplete("account")
-async def account_autocomplete(interaction: discord.Interaction, current: str):
-    current_lower = current.lower()
-    return [
-        app_commands.Choice(name=acc, value=acc)
-        for acc in bot.accounts.keys()
-        if current_lower in acc.lower()
-    ][:25]
-    
-def read_accounts():
-    accounts = {}
-    records = sheet.get_all_records()
-    for record in records:
-        accounts[record['Account']] = {
-            'note': record.get('Note', ''),
-            'status': record.get('Status', 'offline').lower()
-        }
-    return accounts
-
-def save_account(account, note, status="offline"):
-    sheet.append_row([account, note, status])
-
-def update_note(account, new_note):
-    cell = sheet.find(account)
-    if cell:
-        sheet.update_cell(cell.row, 2, new_note)
-
-def update_status(account, new_status):
-    cell = sheet.find(account)
-    if cell:
-        sheet.update_cell(cell.row, 3, new_status)
-
-# Gửi bảng embed trạng thái
-@bot.tree.command(name="status_board", description="📊 Gửi bảng trạng thái tài khoản lên kênh")
-async def status_board(interaction: discord.Interaction):
-    if not bot.accounts:
-        await interaction.response.send_message("⚠️ Không có tài khoản nào để hiển thị.", ephemeral=True)
-        return
-
-    embed = discord.Embed(title="📋 Trạng thái tài khoản Roblox", color=discord.Color.blurple())
-    status_map = {"farming": "🟢 Đang cày", "banned": "🔴 Banned", "offline": "⚪ Offline"}
-
-    for acc, info in bot.accounts.items():
-        status = info.get("status", "offline")
-        display = status_map.get(status.lower(), "⚪ Offline")
-        embed.add_field(name=acc, value=f"Trạng thái: {display}", inline=False)
-
-    # Dropdown chọn tài khoản và chỉnh trạng thái
-    options = [discord.SelectOption(label=acc, value=acc) for acc in list(bot.accounts.keys())[:25]]
-    select = discord.ui.Select(placeholder="Chọn tài khoản để cập nhật trạng thái", options=options)
-
-    class StatusView(discord.ui.View):
-        def __init__(self):
-            super().__init__(timeout=None)
-            self.selected_account = None
-
-        @discord.ui.select(placeholder="Chọn trạng thái mới", options=[
-            discord.SelectOption(label="🟢 Đang cày", value="farming"),
-            discord.SelectOption(label="🔴 Banned", value="banned"),
-            discord.SelectOption(label="⚪ Offline", value="offline")
-        ])
-        async def status_select(self, interaction2: discord.Interaction, select_status: discord.ui.Select):
-            if not self.selected_account:
-                await interaction2.response.send_message("⚠️ Vui lòng chọn tài khoản trước!", ephemeral=True)
-                return
-            new_status = select_status.values[0]
-            bot.accounts[self.selected_account]["status"] = new_status
-            update_status(self.selected_account, new_status)
-            await interaction2.response.send_message(f"✅ Đã cập nhật {self.selected_account} thành {new_status}", ephemeral=True)
-
-        @discord.ui.select(placeholder="Chọn tài khoản để cập nhật trạng thái", options=options)
-        async def account_select(self, interaction3: discord.Interaction, select_account: discord.ui.Select):
-            self.selected_account = select_account.values[0]
-            await interaction3.response.send_message(f"🔄 Đã chọn **{self.selected_account}**. Giờ hãy chọn trạng thái.", ephemeral=True)
-
-    view = StatusView()
-    await interaction.response.send_message(embed=embed, view=view)
+            await channel.send(f"⚙️ Đã tạo {amount} tài khoản Roblox mới:\n```{message}```")
 
 @bot.event
 async def on_ready():
-    print(f"Bot đã đăng nhập với tên: {bot.user} (ID: {bot.user.id})")
+    print(f"Bot đã đăng nhập như {bot.user} (ID: {bot.user.id})")
+    if NOTIFY_CHANNEL_ID:
+        channel = bot.get_channel(NOTIFY_CHANNEL_ID)
+        if channel:
+            await channel.send("🤖 Bot đã khởi động và sẵn sàng hoạt động!")
 
-if __name__ == "__main__":
-    keep_alive()
-    bot.run(TOKEN)
+keep_alive()
+bot.run(TOKEN)
