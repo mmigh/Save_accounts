@@ -5,14 +5,16 @@ import os
 import json
 import csv
 import io
+import random
+import string
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
 
 TOKEN = os.environ.get("TOKEN")
-NOTIFY_CHANNEL_ID = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))  # Kênh thông báo
+NOTIFY_CHANNEL_ID = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))
 
-# Thiết lập Google Sheets
+# Google Sheets setup
 SHEET_NAME = "RobloxAccounts"
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 cred_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
@@ -42,6 +44,17 @@ def update_note(account, new_note):
     cell = sheet.find(account)
     if cell:
         sheet.update_cell(cell.row, 2, new_note)
+
+def generate_roblox_username(length=12):
+    if length < 3 or length > 20:
+        raise ValueError("Username length must be between 3 and 20 characters.")
+    upper = random.choice(string.ascii_uppercase)
+    lower = random.choice(string.ascii_lowercase)
+    digit = random.choice(string.digits)
+    remaining = ''.join(random.choices(string.ascii_letters + string.digits, k=length - 3))
+    result = list(upper + lower + digit + remaining)
+    random.shuffle(result)
+    return ''.join(result)
 
 class MyBot(commands.Bot):
     def __init__(self):
@@ -141,11 +154,9 @@ async def export_accounts(interaction: discord.Interaction):
         await interaction.response.send_message("⚠️ Không có tài khoản để xuất.", ephemeral=True)
         return
 
-    # JSON
     json_data = json.dumps(bot.accounts, indent=2, ensure_ascii=False)
     json_file = discord.File(fp=io.BytesIO(json_data.encode()), filename="accounts.json")
 
-    # CSV
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Account", "Note"])
@@ -173,7 +184,6 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
         await interaction.response.send_message("⚠️ Vui lòng gửi file .txt hợp lệ!", ephemeral=True)
         return
 
-    # Backup hiện tại
     lines = [f"{acc} | {info.get('note', '')}" for acc, info in bot.accounts.items()]
     backup_content = "\n".join(lines)
     backup_file = discord.File(fp=io.BytesIO(backup_content.encode()), filename="accounts_backup_before_restore.txt")
@@ -198,6 +208,31 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
             bot.accounts[account] = {"note": note}
 
     await interaction.followup.send(f"✅ Đã khôi phục **{len(lines)}** tài khoản từ file!", ephemeral=True)
+
+@bot.tree.command(name="generate_account", description="⚙️ Tạo tài khoản Roblox ngẫu nhiên và lưu lại")
+@app_commands.describe(amount="Số lượng tài khoản muốn tạo (1–20)")
+async def generate_account(interaction: discord.Interaction, amount: int):
+    if amount < 1 or amount > 20:
+        await interaction.response.send_message("⚠️ Số lượng phải từ 1 đến 20.", ephemeral=True)
+        return
+
+    generated = []
+    for _ in range(amount):
+        while True:
+            username = generate_roblox_username()
+            if username not in bot.accounts:
+                break
+        bot.accounts[username] = {"note": "Generated"}
+        save_account(username, "Generated")
+        generated.append(username)
+
+    message = "\n".join(generated)
+    await interaction.response.send_message(f"✅ Đã tạo {amount} tài khoản:\n```{message}```", ephemeral=True)
+
+    if NOTIFY_CHANNEL_ID:
+        channel = bot.get_channel(NOTIFY_CHANNEL_ID)
+        if channel:
+            await channel.send(f"⚙️ Đã tạo {amount} tài khoản mới:\n```{message}```")
 
 @remove_account.autocomplete("account")
 @edit_note.autocomplete("account")
