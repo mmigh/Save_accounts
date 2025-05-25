@@ -120,7 +120,7 @@ async def show_accounts(interaction: discord.Interaction):
         selected = select.values[0]
         note = bot.accounts[selected].get("note", "Không có ghi chú")
         await interaction_select.response.send_message(
-            f"🧾 **Tài khoản:** `{selected}`\n📝 **Ghi chú:** {note}", ephemeral=True
+            f"🧾 **Tài khoản:** `{selected}`\n📝 **Ghi chú:** `{note}`", ephemeral=True
         )
 
     select.callback = select_callback
