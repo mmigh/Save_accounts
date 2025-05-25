@@ -244,7 +244,7 @@ async def generate_account(interaction: discord.Interaction, amount: int = 1, le
         generated.append(username)
 
     message = "\n".join(generated)
-    await interaction.response.send_message(f"✅ Đã tạo {amount} tài khoản:\n```{message}```", ephemeral=True)
+    await interaction.response.send_message(f"✅ Đã tạo {amount} tài khoản:\n`{message}`", ephemeral=True)
 
     if NOTIFY_CHANNEL_ID:
         channel = bot.get_channel(NOTIFY_CHANNEL_ID)
