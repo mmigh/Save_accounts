@@ -306,6 +306,34 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
         if channel:
             await channel.send(f"⚙️ Đã tạo {amount} tài khoản Roblox mới:\n```{message}```")
 
+@bot.tree.command(name="generate_account", description="⚙️ Tạo tài khoản Roblox ngẫu nhiên và lưu lại")
+@app_commands.describe(amount="Số lượng tài khoản muốn tạo (1–20)", length="Độ dài tên tài khoản (3–20 ký tự)")
+async def generate_account(interaction: discord.Interaction, amount: int = 1, length: int = 12):
+    if amount < 1 or amount > 20:
+        await interaction.response.send_message("⚠️ Số lượng phải từ 1 đến 20.", ephemeral=True)
+        return
+    if length < 3 or length > 20:
+        await interaction.response.send_message("⚠️ Độ dài tên tài khoản phải từ 3 đến 20.", ephemeral=True)
+        return
+
+    generated = []
+    for _ in range(amount):
+        while True:
+            username = generate_roblox_username(length)
+            if username not in bot.accounts:
+                break
+        bot.accounts[username] = {"note": "Generated"}
+        save_account(username, "Generated")
+        generated.append(username)
+
+    message = "\n".join(generated)
+    await interaction.response.send_message(f"✅ Đã tạo {amount} tài khoản:\n```{message}```", ephemeral=True)
+
+    if NOTIFY_CHANNEL_ID:
+        channel = bot.get_channel(NOTIFY_CHANNEL_ID)
+        if channel:
+            await channel.send(f"⚙️ Đã tạo {amount} tài khoản Roblox mới:\n```{message}```")
+
 # ===== On Ready =====
 @bot.event
 async def on_ready():
