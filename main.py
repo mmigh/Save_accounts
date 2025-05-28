@@ -104,32 +104,47 @@ class MyBot(commands.Bot):
 bot = MyBot()
 
 # ===== Slash Commands for logcal =====
-@bot.tree.command(name="add_logcal", description="➕ Thêm JSON logcal_ugphone")
-@app_commands.describe(logcal="Dòng JSON logcal cần thêm")
-async def add_logcal(interaction: discord.Interaction, logcal: str):
-    logcal = logcal.strip()
-    if logcal in bot.logcals:
-        await interaction.response.send_message("⚠️ Dòng này đã tồn tại.", ephemeral=True)
-        return
-    bot.logcals[logcal] = {}
-    save_logcal(logcal)
-    await interaction.response.send_message("✅ Đã thêm logcal!", ephemeral=True)
-
 @bot.tree.command(name="add_file_logcal", description="📂 Nhập nhiều logcal từ file .txt")
 @app_commands.describe(file="File .txt mỗi dòng là một logcal JSON")
 async def add_file_logcal(interaction: discord.Interaction, file: discord.Attachment):
     if not file.filename.endswith(".txt"):
         await interaction.response.send_message("⚠️ Chỉ nhận file .txt!", ephemeral=True)
         return
+
     content = await file.read()
     lines = [line.strip() for line in content.decode(errors="ignore").splitlines() if line.strip()]
-    count = 0
+    added = 0
+    skipped = 0
+
     for line in lines:
-        if line not in bot.logcals:
-            bot.logcals[line] = {}
-            save_logcal(line)
-            count += 1
-    await interaction.response.send_message(f"✅ Đã thêm {count} dòng logcal.", ephemeral=True)
+        if line in bot.logcals:
+            skipped += 1
+            continue
+        bot.logcals[line] = {}
+        save_logcal(line)
+        added += 1
+
+    await interaction.response.send_message(
+        f"✅ Đã thêm {added} dòng logcal mới.\n⚠️ Bỏ qua {skipped} dòng trùng lặp.",
+        ephemeral=True
+                         )
+
+@bot.tree.command(name="count_logcal", description="🔢 Đếm số lượng logcal_ugphone đang lưu")
+async def count_logcal(interaction: discord.Interaction):
+    count = len(bot.logcals)
+    await interaction.response.send_message(f"📊 Hiện có **{count}** dòng logcal_ugphone trong danh sách.", ephemeral=True)
+
+@bot.tree.command(name="add_logcal", description="➕ Thêm JSON logcal_ugphone")
+@app_commands.describe(logcal="Dòng JSON logcal cần thêm")
+async def add_logcal(interaction: discord.Interaction, logcal: str):
+    logcal = logcal.strip()  # Loại bỏ khoảng trắng đầu/cuối
+    if logcal in bot.logcals:  # Kiểm tra trùng lặp
+        await interaction.response.send_message("⚠️ Dòng này đã tồn tại.", ephemeral=True)
+        return
+
+    bot.logcals[logcal] = {}  # Thêm vào dict RAM
+    save_logcal(logcal)       # Lưu vào Google Sheets
+    await interaction.response.send_message("✅ Đã thêm logcal!", ephemeral=True)
 
 @bot.tree.command(name="get_logcal", description="🎲 Lấy và xóa 1 dòng logcal ngẫu nhiên")
 async def get_logcal(interaction: discord.Interaction):
