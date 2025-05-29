@@ -157,7 +157,7 @@ async def get_logcal(interaction: discord.Interaction):
         logcal = random.choice(list(bot.logcals.keys()))
         delete_logcal(logcal)
         del bot.logcals[logcal]
-        await interaction.response.send_message(f"🎯 Đã lấy:\n```json\n{logcal}```", ephemeral=True)
+        await interaction.response.send_message(f"🎯 Đã lấy:\n`json\n{logcal}`", ephemeral=True)
         if NOTIFY_CHANNEL_ID:
             channel = bot.get_channel(NOTIFY_CHANNEL_ID)
             if channel:
@@ -241,7 +241,7 @@ async def generate_account(interaction: discord.Interaction, amount: int = 1, le
         save_account(username, "Generated")
         generated.append(username)
     message = "\n".join(generated)
-    await interaction.response.send_message(f"✅ Đã tạo {amount} tài khoản:\n```{message}```", ephemeral=True)
+    await interaction.response.send_message(f"✅ Đã tạo {amount} tài khoản:\n`{message}`", ephemeral=True)
 
 @bot.tree.command(name="backup_accounts", description="📥 Sao lưu tài khoản ra file .txt")
 async def backup_accounts(interaction: discord.Interaction):
