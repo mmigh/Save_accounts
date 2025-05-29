@@ -44,8 +44,8 @@ def save_logcal(logcal_json):
 def delete_logcal(logcal_json):
     cell = sheet.find(logcal_json)
     if cell and cell.col == 3:
-        sheet.delete_row(cell.row)
-
+        sheet.delete_rows(cell.row)
+        
 # ===== Account Handling =====
 def read_accounts():
     accounts = {}
@@ -63,7 +63,7 @@ def save_account(account, note):
 def delete_account(account):
     cell = sheet.find(account)
     if cell and cell.col == 1:
-        sheet.delete_row(cell.row)
+        sheet.delete_rows(cell.row)
 
 def update_note(account, new_note):
     cell = sheet.find(account)
