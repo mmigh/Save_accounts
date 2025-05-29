@@ -39,8 +39,9 @@ def read_logcals():
     return logcals
 
 def save_logcal(logcal_json):
-    sheet.append_row(["", "", logcal_json])
-
+    last_row = len(sheet.get_all_values()) + 1
+    sheet.insert_row(["", "", logcal_json], last_row)
+    
 def delete_logcal(logcal_json):
     cell = sheet.find(logcal_json)
     if cell and cell.col == 3:
@@ -58,8 +59,9 @@ def read_accounts():
     return accounts
 
 def save_account(account, note):
-    sheet.append_row([account, note, ""])
-
+    last_row = len(sheet.get_all_values()) + 1
+    sheet.insert_row([account, note, ""], last_row)
+    
 def delete_account(account):
     cell = sheet.find(account)
     if cell and cell.col == 1:
