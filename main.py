@@ -231,6 +231,7 @@ async def generate_account(interaction: discord.Interaction, amount: int = 1, le
     if not (3 <= length <= 20):
         await interaction.response.send_message("⚠️ Độ dài tên phải từ 3–20.", ephemeral=True)
         return
+
     generated = []
     for _ in range(amount):
         while True:
@@ -240,8 +241,14 @@ async def generate_account(interaction: discord.Interaction, amount: int = 1, le
         bot.accounts[username] = {"note": "Generated"}
         save_account(username, "Generated")
         generated.append(username)
-    message = "\n".join(generated)
-    await interaction.response.send_message(f"✅ Đã tạo {amount} tài khoản:\n`{message}`", ephemeral=True)
+
+    message = ", ".join(generated)
+    await interaction.response.send_message(f"✅ Đã tạo {amount} tài khoản: `{message}`", ephemeral=True)
+
+    if NOTIFY_CHANNEL_ID:
+        ch = bot.get_channel(NOTIFY_CHANNEL_ID)
+        if ch:
+            await ch.send(f"⚙️ Tạo {amount} tài khoản mới: `{message}`")
 
 @bot.tree.command(name="backup_accounts", description="📥 Sao lưu tài khoản ra file .txt")
 async def backup_accounts(interaction: discord.Interaction):
