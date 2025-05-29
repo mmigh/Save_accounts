@@ -149,17 +149,15 @@ async def add_logcal(interaction: discord.Interaction, logcal: str):
 @bot.tree.command(name="get_logcal", description="🎲 Lấy và xóa 1 dòng logcal ngẫu nhiên")
 async def get_logcal(interaction: discord.Interaction):
     if not bot.logcals:
-        await interaction.response.send_message("📭 Không còn dòng nào!", ephemeral=True)
+        await interaction.response.send_message("📭 Không còn dòng logcal nào để rút.", ephemeral=True)
         return
+
     logcal = random.choice(list(bot.logcals.keys()))
     delete_logcal(logcal)
     del bot.logcals[logcal]
-    await interaction.response.send_message(f"🎯 `{logcal}`", ephemeral=True)
-    if NOTIFY_CHANNEL_ID:
-        channel = bot.get_channel(NOTIFY_CHANNEL_ID)
-        if channel:
-            await channel.send(f"🎯 Đã rút 1 logcal:\n```json\n{logcal}\n```")
 
+    await interaction.response.send_message(f"🎯 Đã lấy:\n`json\n{logcal}`", ephemeral=True)
+            
 # ===== Slash Commands for account =====
 @bot.tree.command(name="add_account", description="➕ Thêm tài khoản Roblox mới")
 @app_commands.describe(account="Tên tài khoản Roblox", note="Ghi chú cho tài khoản (không bắt buộc)")
