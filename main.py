@@ -39,8 +39,9 @@ def read_logcals():
     return logcals
 
 def save_logcal(logcal_json):
+    safe_json = json.dumps(json.loads(logcal_json), ensure_ascii=False)
     last_row = len(sheet.get_all_values()) + 1
-    sheet.insert_row(["", "", logcal_json], last_row)
+    sheet.insert_row(["", "", safe_json], last_row)
     
 def delete_logcal(logcal_json):
     cell = sheet.find(logcal_json)
