@@ -157,7 +157,7 @@ async def get_logcal(interaction: discord.Interaction):
         logcal = random.choice(list(bot.logcals.keys()))
         delete_logcal(logcal)
         del bot.logcals[logcal]
-        await interaction.response.send_message(f"🎯 Đã lấy:\n`json\n{logcal}`", ephemeral=True)
+        await interaction.response.send_message(f"🎯 Đã lấy:\n```json\n{logcal}```", ephemeral=True)
         if NOTIFY_CHANNEL_ID:
             channel = bot.get_channel(NOTIFY_CHANNEL_ID)
             if channel:
