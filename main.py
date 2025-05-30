@@ -111,8 +111,8 @@ class MyBot(commands.Bot):
         await self.send_or_update_embed()
 
     async def send_or_update_embed(self):
-        if not NOTIFY_CHANNEL_ID:
-          return
+    if not NOTIFY_CHANNEL_ID:
+        return
     channel = self.get_channel(NOTIFY_CHANNEL_ID)
     if not channel:
         return
@@ -143,7 +143,6 @@ class MyBot(commands.Bot):
     self.update_embed_message = await channel.send(message_chunks[0])
     for extra in message_chunks[1:]:
         await channel.send(extra)
-
 bot = MyBot()
 
 # === Logcal Commands ===
