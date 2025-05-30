@@ -306,5 +306,6 @@ async def edit_note(interaction: discord.Interaction, account: str, note: str):
 async def on_ready():
     print(f"✅ Bot đã đăng nhập: {bot.user} (ID: {bot.user.id})")
 
-keep_alive()
-bot.run(TOKEN)
+if __name__ == '__main__':
+    keep_alive()
+    bot.run(TOKEN)
