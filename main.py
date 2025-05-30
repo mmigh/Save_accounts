@@ -14,6 +14,7 @@ from keep_alive import keep_alive
 # === ENV & CONFIG ===
 TOKEN = os.environ.get("TOKEN")
 NOTIFY_CHANNEL_ID = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))
+ACCOUNT_NOTI_CHANNEL = int(os.environ.get("ACCOUNT_NOTI_CHANNEL", 0))
 SHEET_NAME = "RobloxAccounts"
 
 scope = [
