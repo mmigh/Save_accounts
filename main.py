@@ -111,16 +111,18 @@ class MyBot(commands.Bot):
         await self.send_or_update_embed()
 
     async def send_or_update_embed(self):
-    if not NOTIFY_CHANNEL_ID:
+      if not NOTIFY_CHANNEL_ID:
         return
     channel = self.get_channel(NOTIFY_CHANNEL_ID)
-    if not channel:
+      if not channel:
         return
 
+    # Tạo danh sách các dòng 'account | note'
     lines = [f"{acc} | {info.get('note', '')}" for acc, info in self.accounts.items()]
     if not lines:
         message_chunks = ["Không có tài khoản nào."]
     else:
+        # Tự chia nhỏ nội dung nếu vượt quá 2000 ký tự
         message_chunks = []
         current_chunk = ""
         for line in lines:
@@ -131,18 +133,22 @@ class MyBot(commands.Bot):
         if current_chunk:
             message_chunks.append(current_chunk)
 
+    # Nếu đã có tin nhắn cũ, cập nhật lại
     if self.update_embed_message:
         try:
             await self.update_embed_message.edit(content=message_chunks[0])
+            # Gửi thêm nếu có nhiều hơn 1 chunk
             for extra in message_chunks[1:]:
                 await channel.send(extra)
             return
         except:
             pass
 
+    # Gửi mới nếu chưa có
     self.update_embed_message = await channel.send(message_chunks[0])
     for extra in message_chunks[1:]:
         await channel.send(extra)
+
 bot = MyBot()
 
 # === Logcal Commands ===
