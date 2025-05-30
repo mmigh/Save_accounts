@@ -146,7 +146,7 @@ class MyBot(commands.Bot):
 bot = MyBot()
 
 # === Logcal Commands ===
-@bot.tree.command(name="add_logcal", description="➕ Thêm logcal JSON")
+@bot.tree.command(name="logcal", description="➕ Thêm logcal JSON")
 @app_commands.describe(logcal="Chuỗi logcal cần thêm")
 async def add_logcal(interaction: discord.Interaction, logcal: str):
     logcal = logcal.strip()
@@ -157,7 +157,7 @@ async def add_logcal(interaction: discord.Interaction, logcal: str):
     save_logcal(logcal)
     await interaction.response.send_message("✅ Đã thêm logcal!", ephemeral=True)
 
-@bot.tree.command(name="add_file_logcal", description="📂 Nhập nhiều logcal từ file .txt")
+@bot.tree.command(name="file", description="📂 Nhập nhiều logcal từ file .txt")
 @app_commands.describe(file="Tệp .txt, mỗi dòng 1 logcal JSON")
 async def add_file_logcal(interaction: discord.Interaction, file: discord.Attachment):
     if not file.filename.endswith(".txt"):
@@ -182,7 +182,7 @@ async def add_file_logcal(interaction: discord.Interaction, file: discord.Attach
         ephemeral=True
     )
 
-@bot.tree.command(name="count_logcal", description="🔢 Đếm logcal đang lưu")
+@bot.tree.command(name="counts", description="🔢 Đếm logcal đang lưu")
 async def count_logcal(interaction: discord.Interaction):
     await interaction.response.send_message(f"📊 Tổng cộng {len(bot.logcals)} logcal.", ephemeral=True)
 
@@ -197,19 +197,22 @@ async def get_logcal(interaction: discord.Interaction):
     await interaction.response.send_message(f"🎯 Logcal:\n```json\n{logcal}```", ephemeral=True)
 
 # === Account Commands ===
-@bot.tree.command(name="add_account", description="➕ Thêm tài khoản")
-@app_commands.describe(account="Tên tài khoản", note="Ghi chú")
+@bot.tree.command(name="add", description="➕ Thêm tài khoản Roblox")
+@app_commands.describe(account="Tên tài khoản", note="Ghi chú (tùy chọn)")
 async def add_account(interaction: discord.Interaction, account: str, note: str = ""):
     account = account.strip()
+    if not account:
+        await interaction.response.send_message("⚠️ Không được để trống tài khoản!", ephemeral=True)
+        return
     if account in bot.accounts:
-        await interaction.response.send_message("⚠️ Tài khoản đã tồn tại!", ephemeral=True)
+        await interaction.response.send_message(f"⚠️ Tài khoản `{account}` đã tồn tại!", ephemeral=True)
         return
     bot.accounts[account] = {"note": note}
     save_account(account, note)
-    await interaction.response.send_message("✅ Đã thêm tài khoản!", ephemeral=True)
+    await interaction.response.send_message(f"✅ Đã thêm: `{account}` với ghi chú: `{note}`", ephemeral=True)
     await bot.send_or_update_embed()
 
-@bot.tree.command(name="edit_note", description="✏️ Sửa ghi chú")
+@bot.tree.command(name="edit", description="✏️ Sửa ghi chú")
 @app_commands.describe(account="Tên tài khoản", note="Ghi chú mới")
 async def edit_note(interaction: discord.Interaction, account: str, note: str):
     if account not in bot.accounts:
@@ -220,7 +223,7 @@ async def edit_note(interaction: discord.Interaction, account: str, note: str):
     await interaction.response.send_message(f"✅ Ghi chú mới: `{note}`", ephemeral=True)
     await bot.send_or_update_embed()
 
-@bot.tree.command(name="remove_account", description="❌ Xóa tài khoản")
+@bot.tree.command(name="remove", description="❌ Xóa tài khoản")
 @app_commands.describe(account="Tên tài khoản")
 async def remove_account(interaction: discord.Interaction, account: str):
     if account not in bot.accounts:
@@ -231,7 +234,7 @@ async def remove_account(interaction: discord.Interaction, account: str):
     await interaction.response.send_message("✅ Đã xóa tài khoản.", ephemeral=True)
     await bot.send_or_update_embed()
 
-@bot.tree.command(name="show_accounts", description="📋 Xem danh sách tài khoản")
+@bot.tree.command(name="show", description="📋 Xem danh sách tài khoản")
 async def show_accounts(interaction: discord.Interaction):
     options = []
     for acc in list(bot.accounts.keys())[:25]:
@@ -253,7 +256,7 @@ async def show_accounts(interaction: discord.Interaction):
     view.add_item(select)
     await interaction.response.send_message("🧾 Danh sách tài khoản:", view=view, ephemeral=True)
 
-@bot.tree.command(name="generate_account", description="⚙️ Tạo tài khoản ngẫu nhiên")
+@bot.tree.command(name="generate", description="⚙️ Tạo tài khoản ngẫu nhiên")
 @app_commands.describe(amount="Số lượng", length="Độ dài tên")
 async def generate_account(interaction: discord.Interaction, amount: int = 1, length: int = 12):
     if not (1 <= amount <= 20):
@@ -303,6 +306,12 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
     await interaction.response.send_message(f"✅ Khôi phục {len(lines)} tài khoản!", ephemeral=True)
     await bot.send_or_update_embed()
 
+@bot.tree.command(name="count", description="🔢 Đếm số tài khoản đã lưu")
+async def count_accounts(interaction: discord.Interaction):
+    count = len(bot.accounts)
+    await interaction.response.send_message(f"📊 Tổng cộng: **{count}** tài khoản.", ephemeral=True)
+    await bot.send_or_update_embed()
+    
 # === Bot Ready ===
 @bot.event
 async def on_ready():
