@@ -111,9 +111,9 @@ class MyBot(commands.Bot):
         await self.send_or_update_embed()
 
     async def send_or_update_embed(self):
-        if not NOTIFY_CHANNEL_ID:
+        if not ACCOUNT_NOTI_CHANNEL:
             return
-        channel = self.get_channel(NOTIFY_CHANNEL_ID)
+        channel = self.get_channel(ACCOUNT_NOTI_CHANNEL)
         if not channel:
             return
 
