@@ -39,9 +39,13 @@ def read_logcals():
     return logcals
 
 def save_logcal(logcal_json):
-    safe_json = json.dumps(json.loads(logcal_json), ensure_ascii=False)
-    last_row = len(sheet.get_all_values()) + 1
-    sheet.insert_row(["", "", safe_json], last_row)
+    try:
+        parsed = json.loads(logcal_json)
+        safe_json = json.dumps(parsed, ensure_ascii=False)
+    except Exception:
+        safe_json = logcal_json
+
+    sheet.append_row(["", "", safe_json])
     
 def delete_logcal(logcal_json):
     cell = sheet.find(logcal_json)
@@ -243,12 +247,12 @@ async def generate_account(interaction: discord.Interaction, amount: int = 1, le
         generated.append(username)
 
     message = ", ".join(generated)
-    await interaction.response.send_message(f"✅ Đã tạo {amount} tài khoản: `{message}`", ephemeral=True)
+    await interaction.response.send_message(f"✅ Đã tạo {amount} tài khoản:\n```{message}```", ephemeral=True)
 
     if NOTIFY_CHANNEL_ID:
         ch = bot.get_channel(NOTIFY_CHANNEL_ID)
         if ch:
-            await ch.send(f"⚙️ Tạo {amount} tài khoản mới: `{message}`")
+            await ch.send(f"⚙️ Tạo {amount} tài khoản mới: ```{message}```")
 
 @bot.tree.command(name="backup_accounts", description="📥 Sao lưu tài khoản ra file .txt")
 async def backup_accounts(interaction: discord.Interaction):
@@ -280,6 +284,22 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
             sheet.append_row([parts[0], parts[1], ""])
             bot.accounts[parts[0]] = {"note": parts[1]}
     await interaction.response.send_message(f"✅ Đã khôi phục {len(lines)} tài khoản!", ephemeral=True)
+
+@bot.tree.command(name="edit_note", description="✏️ Sửa ghi chú tài khoản")
+@app_commands.describe(account="Tên tài khoản cần sửa", note="Ghi chú mới")
+async def edit_note(interaction: discord.Interaction, account: str, note: str):
+    account = account.strip()
+
+    if account not in bot.accounts:
+        await interaction.response.send_message(
+            f"⚠️ Không tìm thấy tài khoản `{account}`.", ephemeral=True)
+        return
+
+    bot.accounts[account]["note"] = note
+    update_note(account, note)
+
+    await interaction.response.send_message(
+        f"✅ Đã cập nhật ghi chú cho `{account}` thành: `{note}`", ephemeral=True)
 
 # ===== On Ready =====
 @bot.event
