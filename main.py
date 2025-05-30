@@ -132,7 +132,7 @@ class MyBot(commands.Bot):
 
         if self.update_embed_message:
             try:
-                await self.update_embed_message.edit(content=message_chunks[0])
+                await self.update_embed_message.delete(content=message_chunks[0])
                 for extra in message_chunks[1:]:
                     await channel.send(extra)
                 return
@@ -310,7 +310,6 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
 async def count_accounts(interaction: discord.Interaction):
     count = len(bot.accounts)
     await interaction.response.send_message(f"📊 Tổng cộng: **{count}** tài khoản.", ephemeral=True)
-    await bot.send_or_update_embed()
     
 # === Bot Ready ===
 @bot.event
