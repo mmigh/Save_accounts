@@ -114,7 +114,7 @@ class MyBot(commands.Bot):
         if not channel:
             return
 
-        lines = [f"{acc} | {info.get('note', '')}" for acc, info in self.accounts.items()]
+        lines = [f"`{acc}` | `{info.get('note', '')}`" for acc, info in self.accounts.items()]
         if not lines:
             message_chunks = ["Không có tài khoản nào."]
         else:
