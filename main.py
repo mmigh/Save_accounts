@@ -64,7 +64,9 @@ def read_accounts():
     return accounts
 
 def save_account(account, note):
-    sheet.append_row([account, note, ""])
+    row = [account, note or "", ""]
+    last_row = len(sheet.get_all_values()) + 1
+    sheet.insert_row(row, last_row)
 
 def delete_account(account):
     cell = sheet.find(account)
