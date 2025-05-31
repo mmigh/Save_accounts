@@ -11,10 +11,12 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
 
-# === ENV ===
+# === ENV & CONFIG ===
 TOKEN = os.environ.get("TOKEN")
-ACCOUNT_NOTI_CHANNEL = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))
+ACCOUNT_NOTI_CHANNEL = int(os.environ.get("ACCOUNT_NOTI_CHANNEL", 0))
+NOTIFY_CHANNEL_ID = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))
 SHEET_NAME = "RobloxAccounts"
+
 scope = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive"
@@ -23,36 +25,43 @@ scope = [
 cred_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
 if not cred_json:
     raise ValueError("Thiếu GOOGLE_CREDENTIALS_JSON")
+
 creds = ServiceAccountCredentials.from_json_keyfile_dict(json.loads(cred_json), scope)
 client = gspread.authorize(creds)
 sheet = client.open(SHEET_NAME).sheet1
 
-# === Logcal ===
+# === Logcal Handling ===
 def read_logcals():
     logcals = {}
-    values = sheet.col_values(3)[1:]
-    for v in values:
-        if v:
-            logcals[v] = {}
+    col_values = sheet.col_values(3)[1:]
+    for value in col_values:
+        if value:
+            logcals[value] = {}
     return logcals
 
-def save_logcal(data):
+def save_logcal(logcal_json):
     try:
-        parsed = json.loads(data)
-        safe = json.dumps(parsed, ensure_ascii=False)
-    except:
-        safe = data
-    sheet.append_row(["", "", safe])
+        parsed = json.loads(logcal_json)
+        safe_json = json.dumps(parsed, ensure_ascii=False)
+    except Exception:
+        safe_json = logcal_json
+    sheet.append_row(["", "", safe_json])
 
-def delete_logcal(data):
-    cell = sheet.find(data)
+def delete_logcal(logcal_json):
+    cell = sheet.find(logcal_json)
     if cell and cell.col == 3:
         sheet.delete_rows(cell.row)
 
-# === Account ===
+# === Account Handling ===
 def read_accounts():
+    accounts = {}
     records = sheet.get_all_records()
-    return {r['Account']: {"note": r.get('Note', '')} for r in records if r['Account']}
+    for record in records:
+        account = record.get('Account', '')
+        note = record.get('Note', '')
+        if account:
+            accounts[account] = {'note': note}
+    return accounts
 
 def save_account(account, note):
     sheet.append_row([account, note, ""])
@@ -62,43 +71,55 @@ def delete_account(account):
     if cell and cell.col == 1:
         sheet.delete_rows(cell.row)
 
-def update_note(account, note):
+def update_note(account, new_note):
     cell = sheet.find(account)
     if cell:
-        sheet.update_cell(cell.row, 2, note)
+        sheet.update_cell(cell.row, 2, new_note)
 
 def generate_roblox_username(length=12):
-    pool = string.ascii_letters + string.digits
-    while True:
-        result = random.choice(string.ascii_uppercase) + random.choice(string.ascii_lowercase) + random.choice(string.digits)
-        result += ''.join(random.choices(pool, k=length - 3))
-        final = ''.join(random.sample(result, len(result)))
-        return final
+    upper = random.choice(string.ascii_uppercase)
+    lower = random.choice(string.ascii_lowercase)
+    digit = random.choice(string.digits)
+    remain = ''.join(random.choices(string.ascii_letters + string.digits, k=length - 3))
+    result = list(upper + lower + digit + remain)
+    random.shuffle(result)
+    return ''.join(result)
 
-# === Bot ===
+# === Gửi log sau lệnh ===
+async def send_log(interaction: discord.Interaction, action: str):
+    if not NOTIFY_CHANNEL_ID:
+        return
+    channel = interaction.client.get_channel(NOTIFY_CHANNEL_ID)
+    if not channel:
+        return
+    user = interaction.user
+    await channel.send(f"📝 `{user}` đã dùng lệnh: **/{interaction.command.name}**\n📘 `{action}`")
+
+# === Bot Class ===
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         super().__init__(command_prefix=commands.when_mentioned, intents=intents)
         self.accounts = {}
         self.logcals = {}
-        self.update_message_id = None
+        self.last_sent_messages = []
 
     async def setup_hook(self):
         self.accounts = read_accounts()
         self.logcals = read_logcals()
-        self.refresh_loop.start()
-        self.account_notify_loop.start()
+        self.refresh_data.start()
+        self.update_embed_loop.start()
         await self.tree.sync()
+        print("✅ Slash commands đã được đồng bộ!")
 
     @tasks.loop(minutes=3)
-    async def refresh_loop(self):
+    async def refresh_data(self):
         self.accounts = read_accounts()
         self.logcals = read_logcals()
 
     @tasks.loop(hours=10)
-    async def account_notify_loop(self):
-        await self.send_updated_account_message()
+    async def update_embed_loop(self):
+        await self.send_or_update_embed()
 
     async def send_updated_account_message(self):
         if not ACCOUNT_NOTI_CHANNEL:
@@ -129,7 +150,7 @@ class MyBot(commands.Bot):
 bot = MyBot()
 
 # === Logcal Commands ===
-@bot.tree.command(name="add_logcal", description="➕ Thêm logcal JSON")
+@bot.tree.command(name="save", description="➕ Thêm logcal JSON")
 @app_commands.describe(logcal="Dữ liệu logcal")
 async def add_logcal(interaction: discord.Interaction, logcal: str):
     logcal = logcal.strip()
@@ -140,7 +161,7 @@ async def add_logcal(interaction: discord.Interaction, logcal: str):
     save_logcal(logcal)
     await interaction.response.send_message("✅ Đã thêm logcal!", ephemeral=True)
 
-@bot.tree.command(name="get_logcal", description="🎲 Rút 1 logcal ngẫu nhiên")
+@bot.tree.command(name="get", description="🎲 Rút 1 logcal ngẫu nhiên")
 async def get_logcal(interaction: discord.Interaction):
     if not bot.logcals:
         await interaction.response.send_message("📭 Hết logcal!", ephemeral=True)
@@ -149,76 +170,99 @@ async def get_logcal(interaction: discord.Interaction):
     delete_logcal(choice)
     del bot.logcals[choice]
     await interaction.response.send_message(f"🎯 Logcal:\n```json\n{choice}```", ephemeral=True)
+   
+@bot.tree.command(name="add_file", description="📂 Nhập nhiều logcal từ file .txt")
+@app_commands.describe(file="Tệp .txt, mỗi dòng là một logcal JSON hoặc chuỗi")
+async def add_file_logcal(interaction: discord.Interaction, file: discord.Attachment):
+    if not file.filename.endswith(".txt"):
+        await interaction.response.send_message("⚠️ Chỉ hỗ trợ file .txt!", ephemeral=True)
+        return
 
-# === Account Commands ===
-@bot.tree.command(name="add_account", description="➕ Thêm tài khoản")
-@app_commands.describe(account="Tên", note="Ghi chú")
+    content = await file.read()
+    lines = [line.strip() for line in content.decode(errors="ignore").splitlines() if line.strip()]
+    added = 0
+    skipped = 0
+
+    for line in lines:
+        if line in bot.logcals:
+            skipped += 1
+            continue
+        bot.logcals[line] = {}
+        save_logcal(line)
+        added += 1
+
+    await interaction.response.send_message(
+        f"✅ Đã thêm **{added}** logcal mới.\n⚠️ Bỏ qua **{skipped}** dòng trùng lặp.",
+        ephemeral=True
+    )
+    
+@bot.tree.command(name="count_all", description="🔢 Đếm số lượng tài khoản và logcal")
+async def count_all(interaction: discord.Interaction):
+    acc_count = len(bot.accounts)
+    log_count = len(bot.logcals)
+    await interaction.response.send_message(
+        f"📦 Tổng tài khoản: `{acc_count}`\n🗂️ Tổng logcal: `{log_count}`", ephemeral=True
+    )
+
+# === Slash commands ===
+@bot.tree.command(name="add", description="➕ Thêm tài khoản Roblox")
+@app_commands.describe(account="Tên tài khoản", note="Ghi chú (tùy chọn)")
 async def add_account(interaction: discord.Interaction, account: str, note: str = ""):
+    account = account.strip()
+    if not account:
+        await interaction.response.send_message("⚠️ Không được để trống tài khoản!", ephemeral=True)
+        return
     if account in bot.accounts:
-        await interaction.response.send_message("⚠️ Đã tồn tại!", ephemeral=True)
+        await interaction.response.send_message(f"⚠️ Tài khoản `{account}` đã tồn tại!", ephemeral=True)
         return
     bot.accounts[account] = {"note": note}
     save_account(account, note)
-    await interaction.response.send_message(f"✅ Đã thêm `{account}`", ephemeral=True)
-    await bot.send_updated_account_message()
+    await interaction.response.send_message(f"✅ Đã thêm: `{account}` với ghi chú: `{note}`", ephemeral=True)
+    await bot.send_or_update_embed()
+    await send_log(interaction, f"Thêm account: {account} | note: {note}")
 
-@bot.tree.command(name="edit_note", description="✏️ Sửa ghi chú")
-@app_commands.describe(account="Tài khoản", note="Ghi chú mới")
+@bot.tree.command(name="edit", description="✏️ Sửa ghi chú")
+@app_commands.describe(account="Tên tài khoản", note="Ghi chú mới")
 async def edit_note(interaction: discord.Interaction, account: str, note: str):
     if account not in bot.accounts:
-        await interaction.response.send_message("⚠️ Không tồn tại!", ephemeral=True)
+        await interaction.response.send_message("⚠️ Không tìm thấy tài khoản!", ephemeral=True)
         return
-    update_note(account, note)
     bot.accounts[account]["note"] = note
-    await interaction.response.send_message("✅ Đã cập nhật!", ephemeral=True)
-    await bot.send_updated_account_message()
+    update_note(account, note)
+    await interaction.response.send_message(f"✅ Đã cập nhật: `{account}` -> `{note}`", ephemeral=True)
+    await bot.send_or_update_embed()
+    await send_log(interaction, f"Sửa note account: {account} -> {note}")
 
-@bot.tree.command(name="remove_account", description="❌ Xoá tài khoản")
+@bot.tree.command(name="remove", description="❌ Xóa tài khoản")
 @app_commands.describe(account="Tên tài khoản")
 async def remove_account(interaction: discord.Interaction, account: str):
     if account not in bot.accounts:
-        await interaction.response.send_message("⚠️ Không tồn tại!", ephemeral=True)
+        await interaction.response.send_message("⚠️ Không tồn tại.", ephemeral=True)
         return
     delete_account(account)
     del bot.accounts[account]
-    await interaction.response.send_message("🗑️ Đã xoá!", ephemeral=True)
-    await bot.send_updated_account_message()
+    await interaction.response.send_message(f"✅ Đã xoá: `{account}`", ephemeral=True)
+    await bot.send_or_update_embed()
+    await send_log(interaction, f"Xoá account: {account}")
 
-@bot.tree.command(name="generate_account", description="⚙️ Tạo nhiều tài khoản")
+@bot.tree.command(name="generate", description="⚙️ Tạo tài khoản ngẫu nhiên")
 @app_commands.describe(amount="Số lượng", length="Độ dài tên")
 async def generate_account(interaction: discord.Interaction, amount: int = 1, length: int = 12):
     if not (1 <= amount <= 20):
-        await interaction.response.send_message("⚠️ 1–20!", ephemeral=True)
+        await interaction.response.send_message("⚠️ Giới hạn 1–20.", ephemeral=True)
         return
-    accs = []
+    generated = []
     for _ in range(amount):
         while True:
             uname = generate_roblox_username(length)
             if uname not in bot.accounts:
                 break
-        save_account(uname, "Generated")
         bot.accounts[uname] = {"note": "Generated"}
-        accs.append(uname)
-    await interaction.response.send_message("✅ Đã tạo:\n" + "\n".join(f"`{a}`" for a in accs), ephemeral=True)
-    await bot.send_updated_account_message()
-
-@bot.tree.command(name="show_accounts", description="📋 Danh sách tài khoản")
-async def show_accounts(interaction: discord.Interaction):
-    if not bot.accounts:
-        await interaction.response.send_message("📭 Trống!", ephemeral=True)
-        return
-    items = []
-    for acc, info in list(bot.accounts.items())[:25]:
-        items.append(discord.SelectOption(label=acc, description=info.get("note", "")[:100]))
-    select = discord.ui.Select(placeholder="Chọn tài khoản", options=items)
-    async def callback(i: discord.Interaction):
-        selected = select.values[0]
-        note = bot.accounts[selected]["note"]
-        await i.response.send_message(f"📌 `{selected}` | `{note}`", ephemeral=True)
-    select.callback = callback
-    view = discord.ui.View()
-    view.add_item(select)
-    await interaction.response.send_message("📦 Danh sách:", view=view, ephemeral=True)
+        save_account(uname, "Generated")
+        generated.append(uname)
+    await interaction.response.send_message("✅ Đã tạo:\n" + "\n".join(f"`{g}`" for g in generated), ephemeral=True)
+    await bot.send_or_update_embed()
+    await send_log(interaction, f"Tạo {amount} account: {', '.join(generated)}")
 
 @bot.tree.command(name="backup_accounts", description="💾 Sao lưu")
 async def backup_accounts(interaction: discord.Interaction):
@@ -247,11 +291,10 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
             bot.accounts[parts[0]] = {"note": parts[1]}
     await interaction.response.send_message(f"✅ Đã khôi phục {len(lines)}!", ephemeral=True)
     await bot.send_updated_account_message()
-
-# === Ready ===
+# === Bot Ready ===
 @bot.event
 async def on_ready():
-    print(f"✅ Bot đã sẵn sàng: {bot.user}")
+    print(f"🤖 Bot sẵn sàng: {bot.user} (ID: {bot.user.id})")
 
 if __name__ == '__main__':
     keep_alive()
