@@ -106,7 +106,7 @@ class MyBot(commands.Bot):
         self.accounts = read_accounts()
         self.logcals = read_logcals()
 
-    @tasks.loop(hours=10)
+    @tasks.loop(hours=5)
     async def update_embed_loop(self):
         await self.send_or_update_embed()
 
@@ -133,12 +133,10 @@ class MyBot(commands.Bot):
 
         if self.update_embed_message:
             try:
-                await self.update_embed_message.delete(content=message_chunks[0])
-                for extra in message_chunks[1:]:
-                    await channel.send(extra)
-                return
+                await self.update_embed_message.delete(0)
             except:
                 pass
+                self.update_embed_message = None
 
         self.update_embed_message = await channel.send(message_chunks[0])
         for extra in message_chunks[1:]:
