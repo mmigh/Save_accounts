@@ -249,13 +249,21 @@ async def edit_note(interaction: discord.Interaction, account: str, note: str):
 @app_commands.describe(account="Tên tài khoản")
 async def remove_account(interaction: discord.Interaction, account: str):
     if account not in bot.accounts:
-        await interaction.response.send_message("⚠️ Không tồn tại.", ephemeral=True)
+        await interaction.response.send_message("⚠️ Tài khoản không tồn tại.", ephemeral=True)
         return
+
+    # Phản hồi interaction trước
+    await interaction.response.send_message(f"✅ Đã xóa tài khoản: `{account}`", ephemeral=True)
+
+    # Sau đó xóa & cập nhật
     delete_account(account)
     del bot.accounts[account]
-    await interaction.response.send_message(f"✅ Đã xoá: `{account}`", ephemeral=True)
     await bot.send_updated_account_message()
-    await send_log(interaction, f"Xoá account: {account}")
+    
+    # Gửi log bằng kênh (không dùng interaction nữa)
+    log_channel = bot.get_channel(LOG_CHANNEL_ID)
+    if log_channel:
+        await log_channel.send(f"🗑️ `{interaction.user}` đã xóa: `{account}`")
 
 @bot.tree.command(name="generate", description="⚙️ Tạo tài khoản ngẫu nhiên")
 @app_commands.describe(amount="Số lượng", length="Độ dài tên")
