@@ -142,7 +142,7 @@ class MyBot(commands.Bot):
             pass
 
         # Soạn nội dung danh sách tài khoản
-        lines = [f"{acc} | {info.get('note', '')}" for acc, info in self.accounts.items()]
+        lines = [f"`{acc}` | `{info.get('note', '')}`" for acc, info in self.accounts.items()]
         chunks = []
         current_chunk = ""
         for line in lines:
