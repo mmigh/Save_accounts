@@ -261,7 +261,7 @@ async def remove_account(interaction: discord.Interaction, account: str):
     await bot.send_updated_account_message()
     
     # Gửi log bằng kênh (không dùng interaction nữa)
-    log_channel = bot.get_channel(LOG_CHANNEL_ID)
+    log_channel = bot.get_channel(NOTIFY_CHANNEL_ID)
     if log_channel:
         await log_channel.send(f"🗑️ `{interaction.user}` đã xóa: `{account}`")
 
