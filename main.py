@@ -230,7 +230,6 @@ async def add_account(interaction: discord.Interaction, account: str, note: str 
         return
     bot.accounts[account] = {"note": note}
     save_account(account, note)
-    await interaction.response.send_message(f"✅ Đã thêm: `{account}` với ghi chú: `{note}`", ephemeral=True)
     await bot.send_updated_account_message()
     await send_log(interaction, f"Thêm account: {account} | note: {note}")
 
