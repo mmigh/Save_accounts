@@ -119,9 +119,9 @@ class MyBot(commands.Bot):
         self.accounts = read_accounts()
         self.logcals = read_logcals()
 
-    @tasks.loop(hours=10)
+    @tasks.loop(hours=5)
     async def update_embed_loop(self):
-        await self.send_or_update_embed()
+        await self.send_updated_account_message()
 
     async def send_updated_account_message(self):
         if not ACCOUNT_NOTI_CHANNEL:
@@ -129,25 +129,36 @@ class MyBot(commands.Bot):
         channel = self.get_channel(ACCOUNT_NOTI_CHANNEL)
         if not channel:
             return
-        messages = [m async for m in channel.history(limit=10)]
-        for m in messages:
-            if m.author == self.user:
-                try:
-                    await m.delete()
-                except:
-                    pass
-        lines = [f"{acc} | {info.get('note','')}" for acc, info in self.accounts.items()]
+
+        # Xoá các tin nhắn cũ của bot trong kênh
+        try:
+            async for m in channel.history(limit=20):
+                if m.author == self.user:
+                    try:
+                        await m.delete()
+                    except:
+                        pass
+        except:
+            pass
+
+        # Soạn nội dung danh sách tài khoản
+        lines = [f"{acc} | {info.get('note', '')}" for acc, info in self.accounts.items()]
         chunks = []
-        chunk = ""
+        current_chunk = ""
         for line in lines:
-            if len(chunk) + len(line) + 1 > 1900:
-                chunks.append(chunk)
-                chunk = ""
-            chunk += line + "\n"
-        if chunk:
-            chunks.append(chunk)
-        for c in chunks:
-            await channel.send(c or "Không có tài khoản nào.")
+            if len(current_chunk) + len(line) + 1 > 1900:
+                chunks.append(current_chunk)
+                current_chunk = ""
+            current_chunk += line + "\n"
+        if current_chunk:
+            chunks.append(current_chunk)
+
+        if not chunks:
+            chunks.append("Không có tài khoản nào.")
+
+        # Gửi danh sách mới
+        for chunk in chunks:
+            await channel.send(chunk)
 
 bot = MyBot()
 
