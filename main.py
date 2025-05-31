@@ -11,6 +11,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
 import asyncio
+import logging
 import pytesseract
 from PIL import Image
 from telegram import Update
@@ -322,7 +323,43 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
             bot.accounts[parts[0]] = {"note": parts[1]}
     await interaction.response.send_message(f"✅ Đã khôi phục {len(lines)}!", ephemeral=True)
     await bot.send_updated_account_message()
-# === Bot Ready ===
+
+# Cấu hình logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+# Hàm xử lý ảnh được gửi đến bot
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        # Lấy file ảnh từ tin nhắn
+        photo = update.message.photo[-1]
+        file = await context.bot.get_file(photo.file_id)
+        # Tải ảnh về dưới dạng bytes
+        photo_bytes = await file.download_as_bytearray()
+        image = Image.open(io.BytesIO(photo_bytes))
+        # Thực hiện OCR để trích xuất văn bản
+        text = pytesseract.image_to_string(image)
+        # Gửi kết quả trở lại người dùng
+        await update.message.reply_text(f"📄 Văn bản trích xuất:\n{text}")
+    except Exception as e:
+        logging.error(f"Lỗi khi xử lý ảnh: {e}")
+        await update.message.reply_text("❌ Đã xảy ra lỗi khi xử lý ảnh.")
+
+# Hàm khởi chạy bot Telegram
+def run_telegram_bot():
+    telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not telegram_token:
+        logging.warning("Không tìm thấy TELEGRAM_BOT_TOKEN trong biến môi trường.")
+        return
+    application = ApplicationBuilder().token(telegram_token).build()
+    # Thêm handler cho ảnh
+    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    # Chạy bot
+    application.run_polling()
+
+#=== Bot Ready ===
 @bot.event
 async def on_ready():
     print(f"🤖 Bot sẵn sàng: {bot.user} (ID: {bot.user.id})")
