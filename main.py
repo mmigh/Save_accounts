@@ -231,7 +231,7 @@ async def add_account(interaction: discord.Interaction, account: str, note: str 
     bot.accounts[account] = {"note": note}
     save_account(account, note)
     await interaction.response.send_message(f"✅ Đã thêm: `{account}` với ghi chú: `{note}`", ephemeral=True)
-    await bot.send_or_update_embed()
+    await bot.send_updated_account_message()
     await send_log(interaction, f"Thêm account: {account} | note: {note}")
 
 @bot.tree.command(name="edit", description="✏️ Sửa ghi chú")
@@ -243,7 +243,7 @@ async def edit_note(interaction: discord.Interaction, account: str, note: str):
     bot.accounts[account]["note"] = note
     update_note(account, note)
     await interaction.response.send_message(f"✅ Đã cập nhật: `{account}` -> `{note}`", ephemeral=True)
-    await bot.send_or_update_embed()
+    await bot.send_updated_account_message()
     await send_log(interaction, f"Sửa note account: {account} -> {note}")
 
 @bot.tree.command(name="remove", description="❌ Xóa tài khoản")
@@ -255,7 +255,7 @@ async def remove_account(interaction: discord.Interaction, account: str):
     delete_account(account)
     del bot.accounts[account]
     await interaction.response.send_message(f"✅ Đã xoá: `{account}`", ephemeral=True)
-    await bot.send_or_update_embed()
+    await bot.send_updated_account_message()
     await send_log(interaction, f"Xoá account: {account}")
 
 @bot.tree.command(name="generate", description="⚙️ Tạo tài khoản ngẫu nhiên")
@@ -274,7 +274,7 @@ async def generate_account(interaction: discord.Interaction, amount: int = 1, le
         save_account(uname, "Generated")
         generated.append(uname)
     await interaction.response.send_message("✅ Đã tạo:\n" + "\n".join(f"`{g}`" for g in generated), ephemeral=True)
-    await bot.send_or_update_embed()
+    await bot.send_updated_account_message()
     await send_log(interaction, f"Tạo {amount} account: {', '.join(generated)}")
 
 @bot.tree.command(name="backup_accounts", description="💾 Sao lưu")
