@@ -10,11 +10,17 @@ import string
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
+import asyncio
+import pytesseract
+from PIL import Image
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
 # === ENV & CONFIG ===
 TOKEN = os.environ.get("TOKEN")
 ACCOUNT_NOTI_CHANNEL = int(os.environ.get("ACCOUNT_NOTI_CHANNEL", 0))
 NOTIFY_CHANNEL_ID = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 SHEET_NAME = "RobloxAccounts"
 
 scope = [
@@ -324,3 +330,4 @@ async def on_ready():
 if __name__ == '__main__':
     keep_alive()
     bot.run(TOKEN)
+    run_telegram_bot()
