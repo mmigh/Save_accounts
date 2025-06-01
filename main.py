@@ -356,60 +356,56 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
     await interaction.response.send_message(f"✅ Đã khôi phục {len(lines)}!", ephemeral=True)
     await bot.send_updated_account_message()
     
-#========show===========
-class AccountView(discord.ui.View):
-    def __init__(self, accounts, page=0):
-        super().__init__(timeout=60)
-        self.accounts = accounts
-        self.page = page
-        self.max_pages = (len(accounts) - 1) // 25 + 1
-        self.select.options = self.get_options()
+@bot.tree.command(name="show", description="📋 Hiển thị thông tin tài khoản cụ thể")
+async def show_account(interaction: discord.Interaction):
+    class AccountModal(discord.ui.Modal, title="🔍 Tra cứu tài khoản"):
+        acc = discord.ui.TextInput(label="Tên tài khoản", placeholder="Nhập chính xác hoặc một phần tên tài khoản", required=True)
 
-    def get_options(self):
-        start = self.page * 25
-        end = start + 25
-        options = []
-        for acc in self.accounts[start:end]:
-            note = bot.accounts[acc].get("note", "")
-            desc = (note[:97] + "...") if len(note) > 100 else note
-            options.append(discord.SelectOption(label=acc[:100], description=desc))
-        return options
+        async def on_submit(self, modal_interaction: discord.Interaction):
+            search_term = self.acc.value.strip().lower()
+            matched = [acc for acc in bot.accounts if search_term in acc.lower()]
 
-    @discord.ui.select(placeholder="Chọn tài khoản", min_values=1, max_values=1)
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        acc = select.values[0]
-        info = bot.accounts.get(acc, {})
-        await interaction.response.send_message(
-            f"🧾 Tài khoản: `{acc}`\n"
-            f"📝 Ghi chú: `{info.get('note', '')}`\n"
-            f"🔑 OTP: `{info.get('otp', '')}`\n"
-            f"📧 Email: `{info.get('email', '')}`",
-            ephemeral=True
-        )
+            if not matched:
+                await modal_interaction.response.send_message("⚠️ Không tìm thấy tài khoản phù hợp.", ephemeral=True)
+                return
 
-    @discord.ui.button(label="⬅️", style=discord.ButtonStyle.secondary)
-    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.page > 0:
-            self.page -= 1
-            self.select.options = self.get_options()
-            await interaction.response.edit_message(view=self)
+            if len(matched) == 1:
+                acc = matched[0]
+                data = bot.accounts[acc]
+                note = data.get("note", "Không có")
+                otp = data.get("otp", "Không có")
+                email = data.get("email", "Không có")
+                await modal_interaction.response.send_message(
+                    f"🧾 **Tài khoản:** `{acc}`\n"
+                    f"📝 **Ghi chú:** `{note}`\n"
+                    f"🔑 **OTP:** `{otp}`\n"
+                    f"📧 **Email:** `{email}`", ephemeral=True
+                )
+            else:
+                options = [
+                    discord.SelectOption(label=acc[:100], value=acc) for acc in matched[:25]
+                ]
+                select = discord.ui.Select(placeholder="Chọn tài khoản để xem", options=options)
 
-    @discord.ui.button(label="➡️", style=discord.ButtonStyle.secondary)
-    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.page < self.max_pages - 1:
-            self.page += 1
-            self.select.options = self.get_options()
-            await interaction.response.edit_message(view=self)
+                async def select_callback(select_interaction: discord.Interaction):
+                    acc = select.values[0]
+                    data = bot.accounts[acc]
+                    note = data.get("note", "Không có")
+                    otp = data.get("otp", "Không có")
+                    email = data.get("email", "Không có")
+                    await select_interaction.response.send_message(
+                        f"🧾 **Tài khoản:** `{acc}`\n"
+                        f"📝 **Ghi chú:** `{note}`\n"
+                        f"🔑 **OTP:** `{otp}`\n"
+                        f"📧 **Email:** `{email}`", ephemeral=True
+                    )
 
-@bot.tree.command(name="show", description="📋 Hiển thị thông tin tài khoản")
-async def show(interaction: discord.Interaction):
-    if not bot.accounts:
-        await interaction.response.send_message("📭 Không có tài khoản nào!", ephemeral=True)
-        return
+                select.callback = select_callback
+                view = discord.ui.View()
+                view.add_item(select)
+                await modal_interaction.response.send_message("🎯 Có nhiều kết quả, chọn tài khoản:", view=view, ephemeral=True)
 
-    accounts = list(bot.accounts.keys())
-    view = AccountView(accounts)
-    await interaction.response.send_message("📚 Chọn tài khoản để hiển thị thông tin:", view=view, ephemeral=True)
+    await interaction.response.send_modal(AccountModal())
     
 #=== Bot Ready ===
 @bot.event
