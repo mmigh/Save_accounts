@@ -57,16 +57,18 @@ def read_accounts():
     accounts = {}
     records = sheet.get_all_records()
     for record in records:
-        account = record.get('Account', '')
-        note = record.get('Note', '')
+        account = record.get("Account", "").strip()
         if account:
-            accounts[account] = {'note': note}
+            accounts[account] = {
+                "note": record.get("Note", "").strip(),
+                "otp": record.get("otp", "").strip(),
+                "email": record.get("email", "").strip()
+            }
     return accounts
 
-def save_account(account, note):
-    row = [account, note or "", ""]
-    last_row = len(sheet.get_all_values()) + 1
-    sheet.insert_row(row, last_row)
+def save_account(account, note="", otp="", email=""):
+    row = [account, note, otp, email, ""]
+    sheet.append_row(row)
 
 def delete_account(account):
     cell = sheet.find(account)
@@ -77,6 +79,17 @@ def update_note(account, new_note):
     cell = sheet.find(account)
     if cell:
         sheet.update_cell(cell.row, 2, new_note)
+
+def update_account_field(account, field_name, new_value):
+    # Chỉ cho phép cập nhật 3 cột: Note (2), otp (3), email (4)
+    col_map = {"note": 2, "otp": 3, "email": 4}
+    if field_name not in col_map:
+        return False
+    cell = sheet.find(account)
+    if cell and cell.col == 1:
+        sheet.update_cell(cell.row, col_map[field_name], new_value)
+        return True
+    return False
 
 def generate_roblox_username(length=12):
     upper = random.choice(string.ascii_uppercase)
