@@ -33,7 +33,7 @@ sheet = client.open(SHEET_NAME).sheet1
 # === Logcal Handling ===
 def read_logcals():
     logcals = {}
-    col_values = sheet.col_values(3)[1:]
+    col_values = sheet.col_values(5)[1:]
     for value in col_values:
         if value:
             logcals[value] = {}
@@ -45,11 +45,11 @@ def save_logcal(logcal_json):
         safe_json = json.dumps(parsed, ensure_ascii=False)
     except Exception:
         safe_json = logcal_json
-    sheet.append_row(["", "", safe_json])
+    sheet.append_row(["", "", "", "", safe_json])
 
 def delete_logcal(logcal_json):
     cell = sheet.find(logcal_json)
-    if cell and cell.col == 3:
+    if cell and cell.col == 5:
         sheet.delete_rows(cell.row)
 
 # === Account Handling ===
