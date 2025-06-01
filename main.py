@@ -251,17 +251,43 @@ async def add_account(interaction: discord.Interaction, account: str, note: str 
     await bot.send_updated_account_message()
     await send_log(interaction, f"Thêm account: {account} | note: {note}")
 
-@bot.tree.command(name="edit", description="✏️ Sửa ghi chú")
-@app_commands.describe(account="Tên tài khoản", note="Ghi chú mới")
-async def edit_note(interaction: discord.Interaction, account: str, note: str):
+@bot.tree.command(name="edit", description="✏️ Sửa thông tin tài khoản")
+@app_commands.describe(
+    account="Tên tài khoản cần sửa",
+    note="Ghi chú mới (bỏ trống nếu không sửa)",
+    otp="Mã OTP mới (bỏ trống nếu không sửa)",
+    email="Email mới (bỏ trống nếu không sửa)"
+)
+async def edit(interaction: discord.Interaction, account: str, note: str = "", otp: str = "", email: str = ""):
+    account = account.strip()
     if account not in bot.accounts:
         await interaction.response.send_message("⚠️ Không tìm thấy tài khoản!", ephemeral=True)
         return
-    bot.accounts[account]["note"] = note
-    update_note(account, note)
-    await interaction.response.send_message(f"✅ Đã cập nhật: `{account}` -> `{note}`", ephemeral=True)
+
+    updates = []
+    if note:
+        bot.accounts[account]["note"] = note
+        update_account_field(account, "note", note)
+        updates.append(f"note: `{note}`")
+    if otp:
+        bot.accounts[account]["otp"] = otp
+        update_account_field(account, "otp", otp)
+        updates.append(f"otp: `{otp}`")
+    if email:
+        bot.accounts[account]["email"] = email
+        update_account_field(account, "email", email)
+        updates.append(f"email: `{email}`")
+
+    if not updates:
+        await interaction.response.send_message("⚠️ Không có thông tin nào để cập nhật.", ephemeral=True)
+        return
+
+    await interaction.response.send_message(
+        f"✅ Đã cập nhật `{account}`:\n" + "\n".join(updates),
+        ephemeral=True
+    )
     await bot.send_updated_account_message()
-    await send_log(interaction, f"Sửa note account: {account} -> {note}")
+    await send_log(interaction, f"✏️ Sửa {account}: " + " | ".join(updates))
 
 @bot.tree.command(name="remove", description="❌ Xóa tài khoản")
 @app_commands.describe(account="Tên tài khoản")
@@ -329,6 +355,34 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
             bot.accounts[parts[0]] = {"note": parts[1]}
     await interaction.response.send_message(f"✅ Đã khôi phục {len(lines)}!", ephemeral=True)
     await bot.send_updated_account_message()
+
+@bot.tree.command(name="show", description="📋 Hiển thị thông tin tài khoản")
+async def show(interaction: discord.Interaction):
+    if not bot.accounts:
+        await interaction.response.send_message("📭 Không có tài khoản nào!", ephemeral=True)
+        return
+
+    options = []
+    for acc in list(bot.accounts.keys())[:25]:
+        options.append(discord.SelectOption(label=acc[:100]))
+
+    select = discord.ui.Select(placeholder="Chọn tài khoản để xem", options=options)
+
+    async def callback(i: discord.Interaction):
+        acc = select.values[0]
+        info = bot.accounts.get(acc, {})
+        await i.response.send_message(
+            f"🧾 Tài khoản: `{acc}`\n"
+            f"📝 Ghi chú: `{info.get('note', '')}`\n"
+            f"🔑 OTP: `{info.get('otp', '')}`\n"
+            f"📧 Email: `{info.get('email', '')}`",
+            ephemeral=True
+        )
+
+    select.callback = callback
+    view = discord.ui.View()
+    view.add_item(select)
+    await interaction.response.send_message("📚 Chọn tài khoản để hiển thị thông tin:", view=view, ephemeral=True)
 
 #=== Bot Ready ===
 @bot.event
