@@ -57,12 +57,12 @@ def read_accounts():
     accounts = {}
     records = sheet.get_all_records()
     for record in records:
-        account = record.get("Account", "").strip()
+        account = record.get('Account', '').strip()
         if account:
             accounts[account] = {
-                "note": record.get("Note", "").strip(),
-                "otp": record.get("otp", "").strip(),
-                "email": record.get("email", "").strip()
+                'note': record.get('Note', '').strip(),
+                'otp': record.get('otp', '').strip(),
+                'email': record.get('email', '').strip()
             }
     return accounts
 
@@ -355,23 +355,31 @@ async def restore_accounts(interaction: discord.Interaction, file: discord.Attac
             bot.accounts[parts[0]] = {"note": parts[1]}
     await interaction.response.send_message(f"✅ Đã khôi phục {len(lines)}!", ephemeral=True)
     await bot.send_updated_account_message()
+    
+#========show===========
+class AccountView(discord.ui.View):
+    def __init__(self, accounts, page=0):
+        super().__init__(timeout=60)
+        self.accounts = accounts
+        self.page = page
+        self.max_pages = (len(accounts) - 1) // 25 + 1
+        self.select.options = self.get_options()
 
-@bot.tree.command(name="show", description="📋 Hiển thị thông tin tài khoản")
-async def show(interaction: discord.Interaction):
-    if not bot.accounts:
-        await interaction.response.send_message("📭 Không có tài khoản nào!", ephemeral=True)
-        return
+    def get_options(self):
+        start = self.page * 25
+        end = start + 25
+        options = []
+        for acc in self.accounts[start:end]:
+            note = bot.accounts[acc].get("note", "")
+            desc = (note[:97] + "...") if len(note) > 100 else note
+            options.append(discord.SelectOption(label=acc[:100], description=desc))
+        return options
 
-    options = []
-    for acc in list(bot.accounts.keys())[:25]:
-        options.append(discord.SelectOption(label=acc[:100]))
-
-    select = discord.ui.Select(placeholder="Chọn tài khoản để xem", options=options)
-
-    async def callback(i: discord.Interaction):
+    @discord.ui.select(placeholder="Chọn tài khoản", min_values=1, max_values=1)
+    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
         acc = select.values[0]
         info = bot.accounts.get(acc, {})
-        await i.response.send_message(
+        await interaction.response.send_message(
             f"🧾 Tài khoản: `{acc}`\n"
             f"📝 Ghi chú: `{info.get('note', '')}`\n"
             f"🔑 OTP: `{info.get('otp', '')}`\n"
@@ -379,11 +387,30 @@ async def show(interaction: discord.Interaction):
             ephemeral=True
         )
 
-    select.callback = callback
-    view = discord.ui.View()
-    view.add_item(select)
-    await interaction.response.send_message("📚 Chọn tài khoản để hiển thị thông tin:", view=view, ephemeral=True)
+    @discord.ui.button(label="⬅️", style=discord.ButtonStyle.secondary)
+    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.page > 0:
+            self.page -= 1
+            self.select.options = self.get_options()
+            await interaction.response.edit_message(view=self)
 
+    @discord.ui.button(label="➡️", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.page < self.max_pages - 1:
+            self.page += 1
+            self.select.options = self.get_options()
+            await interaction.response.edit_message(view=self)
+
+@bot.tree.command(name="show", description="📋 Hiển thị thông tin tài khoản")
+async def show(interaction: discord.Interaction):
+    if not bot.accounts:
+        await interaction.response.send_message("📭 Không có tài khoản nào!", ephemeral=True)
+        return
+
+    accounts = list(bot.accounts.keys())
+    view = AccountView(accounts)
+    await interaction.response.send_message("📚 Chọn tài khoản để hiển thị thông tin:", view=view, ephemeral=True)
+    
 #=== Bot Ready ===
 @bot.event
 async def on_ready():
