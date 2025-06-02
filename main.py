@@ -195,7 +195,7 @@ async def get_logcal(interaction: discord.Interaction):
     choice = random.choice(list(bot.logcals))
     delete_logcal(choice)
     del bot.logcals[choice]
-    await interaction.response.send_message(f"🎯\n```{choice}```", ephemeral=True)
+    await interaction.response.send_message(f"\n```{choice}```", ephemeral=True)
    
 @bot.tree.command(name="add_file", description="📂 Nhập nhiều logcal từ file .txt")
 @app_commands.describe(file="Tệp .txt, mỗi dòng là một logcal JSON hoặc chuỗi")
