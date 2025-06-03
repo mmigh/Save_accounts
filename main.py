@@ -132,7 +132,7 @@ class MyBot(commands.Bot):
         self.accounts = read_accounts()
         self.logcals = read_logcals()
 
-    @tasks.loop(hours=5)
+    @tasks.loop(hours=3)
     async def update_embed_loop(self):
         await self.send_updated_account_message()
 
@@ -155,7 +155,10 @@ class MyBot(commands.Bot):
             pass
 
         # Soạn nội dung danh sách tài khoản
-        lines = [f"`{acc}` | `{info.get('note', '')}`" for acc, info in self.accounts.items()]
+        lines = [
+    f"`{acc}` | `{info.get('note', '')}` {'| ✅' if info.get('otp') else '| ❌'}"
+    for acc, info in self.accounts.items()
+                    ]
         chunks = []
         current_chunk = ""
         for line in lines:
