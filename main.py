@@ -313,8 +313,12 @@ async def remove_account(interaction: discord.Interaction, account: str):
 @app_commands.describe(amount="Số lượng", length="Độ dài tên")
 async def generate_account(interaction: discord.Interaction, amount: int = 1, length: int = 12):
     if not (1 <= amount <= 20):
-        await interaction.response.send_message("⚠️ Giới hạn 1–20.", ephemeral=True)
+        await interaction.response.send_message("⚠️ Giới hạn từ 1 đến 20.", ephemeral=True)
         return
+    if not (3 <= length <= 20):
+        await interaction.response.send_message("⚠️ Độ dài tên phải từ 3 đến 20 ký tự.", ephemeral=True)
+        return
+
     generated = []
     for _ in range(amount):
         while True:
@@ -324,10 +328,11 @@ async def generate_account(interaction: discord.Interaction, amount: int = 1, le
         bot.accounts[uname] = {"note": "Generated"}
         save_account(uname, "Generated")
         generated.append(uname)
+
     await interaction.response.send_message("✅ Đã tạo:\n" + "\n".join(f"`{g}`" for g in generated), ephemeral=True)
     await bot.send_updated_account_message()
     await send_log(interaction, f"Tạo {amount} account: {', '.join(generated)}")
-
+    
 @bot.tree.command(name="backup_accounts", description="💾 Sao lưu")
 async def backup_accounts(interaction: discord.Interaction):
     content = "\n".join([f"{acc} | {info.get('note','')}" for acc, info in bot.accounts.items()])
