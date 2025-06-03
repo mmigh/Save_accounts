@@ -333,7 +333,9 @@ async def backup_accounts(interaction: discord.Interaction):
     content = "\n".join([f"{acc} | {info.get('note','')}" for acc, info in bot.accounts.items()])
     file = discord.File(io.BytesIO(content.encode()), filename="accounts_backup.txt")
     await interaction.response.send_message("🗂️ Dữ liệu sao lưu:", file=file, ephemeral=True)
+    await log_channel.send(f"`{interaction.user}` đã sao lưu")
 
+    
 @bot.tree.command(name="restore_accounts", description="♻️ Khôi phục từ file")
 @app_commands.describe(file="File .txt")
 async def restore_accounts(interaction: discord.Interaction, file: discord.Attachment):
