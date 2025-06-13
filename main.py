@@ -97,7 +97,7 @@ class MyBot(commands.Bot):
         lines = []
         for a, info in self.accounts.items():
             chk = "✅" if info.get("otp") else "❌"
-            lines.append(f"{a} | {info.get('note','')} | {chk}")
+            lines.append(f"`{a}` | `{info.get('note','')}` | {chk}")
 
         chunk = ""
         for line in lines:
@@ -188,7 +188,7 @@ class MyBot(commands.Bot):
                 if len(matches) == 1:
                     a, i = matches[0]
                     await interaction.response.send_message(
-                        f"🧾 **{a}**\n📝 {i.get('note','')}\n🔑 OTP: {i.get('otp','')}\n📧 Email: {i.get('email','')}",
+                        f"🧾 **{a}**\n📝 {i.get('note','')}\n🔑 OTP: `{i.get('otp','')}`\n📧 Email: {i.get('email','')}",
                         ephemeral=True
                     )
                 else:
@@ -197,7 +197,7 @@ class MyBot(commands.Bot):
                     async def cb(i): 
                         sel = select.values[0]; info = self.accounts.get(sel, {})
                         await i.response.send_message(
-                            f"🧾 **{sel}**\n📝 {info.get('note','')}\n🔑 OTP: {info.get('otp','')}\n📧 Email: {info.get('email','')}",
+                            f"🧾 **{sel}**\n📝 {info.get('note','')}\n🔑 OTP: `{info.get('otp','')}`\n📧 Email: {info.get('email','')}",
                             ephemeral=True
                         )
                     select.callback = cb
