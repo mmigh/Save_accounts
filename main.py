@@ -8,7 +8,7 @@ import string
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import io
-from keep_alive import keep_alive  # Nếu không dùng, có thể xoá
+from keep_alive import keep_alive  # Nếu không cần, có thể xóa
 
 TOKEN = os.environ.get("TOKEN")
 SHEET_NAME = "RobloxAccounts"
@@ -26,7 +26,6 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(json.loads(cred_json), 
 client = gspread.authorize(creds)
 sheet = client.open(SHEET_NAME).sheet1
 
-# === Account Functions ===
 def read_accounts():
     accounts = {}
     records = sheet.get_all_records()
@@ -67,7 +66,6 @@ def generate_roblox_username(length=12):
     random.shuffle(result)
     return ''.join(result)
 
-# === Bot ===
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -197,23 +195,28 @@ class MyBot(commands.Bot):
             view.add_item(select)
             await interaction.response.send_message("📚 Chọn tài khoản để xem:", view=view, ephemeral=True)
 
-        @self.tree.command(name="backup_and_clear_logcal", description="💣 Sao lưu & xoá cột logcal (E)")
+        @self.tree.command(name="backup_and_clear_logcal", description="💣 Sao lưu & xoá logcal (cột E)")
         async def backup_and_clear_logcal(interaction: discord.Interaction):
-            values = sheet.col_values(5)[1:]  # Cột E (logcal), bỏ header
-            values = [v for v in values if v.strip()]
-            if not values:
-                await interaction.response.send_message("📭 Không có logcal nào!", ephemeral=True)
+            await interaction.response.defer(ephemeral=True)
+            values = sheet.col_values(5)[1:]  # Cột E
+            logcals = [v.strip() for v in values if v.strip()]
+            if not logcals:
+                await interaction.followup.send("📭 Không có logcal nào!", ephemeral=True)
                 return
-            content = "\n".join(values)
-            file = discord.File(io.BytesIO(content.encode()), filename="logcal_backup.txt")
-            for i in range(2, len(values) + 2):  # Hàng 2 trở đi
+            try:
+                content = "\n".join(logcals)
+                file_bytes = io.BytesIO(content.encode('utf-8'))
+                file = discord.File(file_bytes, filename="logcal_backup.txt")
+            except Exception as e:
+                await interaction.followup.send(f"❌ Lỗi khi tạo file: {e}", ephemeral=True)
+                return
+            for i in range(2, len(values) + 2):
                 try:
                     sheet.update_cell(i, 5, "")
-                except:
-                    pass
-            await interaction.response.send_message("✅ Đã backup và xoá logcal!", file=file, ephemeral=True)
+                except Exception as e:
+                    print(f"⚠️ Không thể xoá hàng {i}: {e}")
+            await interaction.followup.send("✅ Đã backup và xoá logcal!", file=file, ephemeral=True)
 
-# === Run Bot ===
 bot = MyBot()
 
 @bot.event
