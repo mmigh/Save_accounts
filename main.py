@@ -20,48 +20,7 @@ class MyBot(commands.Bot):
         await setup_commands(self)
         self.refresh_data.start()
         print("✅ Bot đã setup thành công!")
-
-    @tasks.loop(minutes=3)
-    async def refresh_data(self):
-
-    @tasks.loop(hours=5)
-    async def update_embed_loop(self):
-        await self.send_updated_account_message()
-
-    async def send_updated_account_message(self):
-        if not ACCOUNT_NOTI_CHANNEL:
-            return
-        channel = self.get_channel(ACCOUNT_NOTI_CHANNEL)
-        if not channel:
-            return
-
-        try:
-            async for m in channel.history(limit=20):
-                if m.author == self.user:
-                    try:
-                        await m.delete()
-                    except:
-                        pass
-        except:
-            pass
-
-        lines = [f"`{acc}` | `{info.get('note', '')}`" for acc, info in self.accounts.items()]
-        chunks = []
-        current_chunk = ""
-        for line in lines:
-            if len(current_chunk) + len(line) + 1 > 1900:
-                chunks.append(current_chunk)
-                current_chunk = ""
-            current_chunk += line + "\n"
-        if current_chunk:
-            chunks.append(current_chunk)
-
-        if not chunks:
-            chunks.append("Không có tài khoản nào.")
-
-        for chunk in chunks:
-            await channel.send(chunk)
-
+    
 bot = MyBot()
 
 @bot.event
