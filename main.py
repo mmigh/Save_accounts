@@ -6,17 +6,19 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
 
+# === ENV ===
 TOKEN = os.environ.get("TOKEN")
 SHEET_NAME = "RobloxAccounts"
 ACCOUNT_NOTI_CHANNEL = int(os.environ.get("ACCOUNT_NOTI_CHANNEL", 0))
 NOTIFY_CHANNEL_ID = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))
 
+# === Google Sheet setup ===
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"]), scope)
 client = gspread.authorize(creds)
 sheet = client.open(SHEET_NAME).sheet1
 
-# ==== Helpers ====
+# === Helper ===
 def read_accounts():
     accs = {}
     for row in sheet.get_all_records():
@@ -47,22 +49,17 @@ def update_account_field(a, field, val):
     return False
 
 def generate_name(n=12):
-    while True:
-        s = (
-            random.choice(string.ascii_uppercase) +
-            random.choice(string.ascii_lowercase) +
-            random.choice(string.digits) +
-            "".join(random.choices(string.ascii_letters + string.digits, k=n-3))
-        )
-        return "".join(random.sample(s, len(s)))
+    s = random.choice(string.ascii_uppercase) + random.choice(string.ascii_lowercase) + random.choice(string.digits)
+    s += ''.join(random.choices(string.ascii_letters + string.digits, k=n-3))
+    return ''.join(random.sample(s, len(s)))
 
 async def send_log(bot, interaction, action):
-    if not NOTIFY_CHANNEL_ID: return
-    ch = bot.get_channel(NOTIFY_CHANNEL_ID)
-    if ch:
-        await ch.send(f"📝 `{interaction.user}` dùng lệnh `/{interaction.command.name}`\n📘 {action}")
+    if NOTIFY_CHANNEL_ID:
+        ch = bot.get_channel(NOTIFY_CHANNEL_ID)
+        if ch:
+            await ch.send(f"📝 `{interaction.user}` dùng lệnh `/{interaction.command.name}`\n📘 {action}")
 
-# ==== Bot Class ====
+# === Bot class ===
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -84,21 +81,27 @@ class MyBot(commands.Bot):
 
     @tasks.loop(hours=10)
     async def post_account_summary(self):
-        if not ACCOUNT_NOTI_CHANNEL: return
+        if not ACCOUNT_NOTI_CHANNEL:
+            return
         ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
-        if not ch: return
+        if not ch:
+            return
 
+        # Xoá tin nhắn cũ
         try:
             async for msg in ch.history(limit=50):
                 if msg.author == self.user:
                     await msg.delete()
         except: pass
 
+        # Soạn nội dung mới
         lines = []
-        for a, info in self.accounts.items():
-            chk = "✅" if info.get("otp") else "❌"
-            lines.append(f"`{a}` | `{info.get('note','')}` | {chk}")
+        for acc, info in self.accounts.items():
+            otp = info.get("otp", "")
+            chk = "✅" if otp else "❌"
+            lines.append(f"📄 `{acc}` | 🔑 `{otp}` {chk}")
 
+        # Gửi từng chunk
         chunk = ""
         for line in lines:
             if len(chunk) + len(line) + 1 > 1900:
@@ -112,112 +115,116 @@ class MyBot(commands.Bot):
         @self.tree.command(name="add", description="➕ Thêm tài khoản")
         @app_commands.describe(account="Tên", note="Ghi chú")
         async def add(interaction, account: str, note: str = ""):
+            await interaction.response.defer(ephemeral=True)
             a = account.strip()
             if not a:
-                return await interaction.response.send_message("⚠️ Nhập tên!", ephemeral=True)
+                return await interaction.followup.send("⚠️ Nhập tên!")
             if a in self.accounts:
-                return await interaction.response.send_message("⚠️ Đã tồn tại!", ephemeral=True)
+                return await interaction.followup.send("⚠️ Đã tồn tại!")
             self.accounts[a] = {"note": note, "otp": "", "email": ""}
             save_account(a, note)
-            await interaction.response.send_message(f"✅ Đã thêm `{a}`", ephemeral=True)
-            await send_log(self, interaction, f"Thêm `{a}` với ghi chú: `{note}`")
+            await interaction.followup.send(f"✅ Đã thêm `{a}`")
+            await send_log(self, interaction, f"Thêm `{a}` | `{note}`")
             await self.post_account_summary()
 
         @self.tree.command(name="remove", description="❌ Xoá tài khoản")
         @app_commands.describe(account="Tên")
         async def remove(interaction, account: str):
+            await interaction.response.defer(ephemeral=True)
             a = account.strip()
             if a not in self.accounts:
-                return await interaction.response.send_message("⚠️ Không tìm thấy!", ephemeral=True)
+                return await interaction.followup.send("⚠️ Không tồn tại!")
             delete_account(a)
             del self.accounts[a]
-            await interaction.response.send_message(f"🗑️ Đã xoá `{a}`", ephemeral=True)
+            await interaction.followup.send(f"🗑️ Đã xoá `{a}`")
             await send_log(self, interaction, f"Xoá `{a}`")
             await self.post_account_summary()
 
-        @self.tree.command(name="edit", description="✏️ Sửa thông tin")
+        @self.tree.command(name="edit", description="✏️ Sửa tài khoản")
         @app_commands.describe(account="Tên", note="Note", otp="OTP", email="Email")
         async def edit(interaction, account: str, note: str = "", otp: str = "", email: str = ""):
+            await interaction.response.defer(ephemeral=True)
             a = account.strip()
             if a not in self.accounts:
-                return await interaction.response.send_message("⚠️ Không tìm thấy!", ephemeral=True)
-            changes = []
+                return await interaction.followup.send("⚠️ Không tồn tại!")
+            updates = []
             if note:
                 self.accounts[a]["note"] = note
                 update_account_field(a, "note", note)
-                changes.append(f"note={note}")
+                updates.append(f"note=`{note}`")
             if otp:
                 self.accounts[a]["otp"] = otp
                 update_account_field(a, "otp", otp)
-                changes.append(f"otp={otp}")
+                updates.append(f"otp=`{otp}`")
             if email:
                 self.accounts[a]["email"] = email
                 update_account_field(a, "email", email)
-                changes.append(f"email={email}")
-            if not changes:
-                return await interaction.response.send_message("⚠️ Không có gì để sửa!", ephemeral=True)
-            await interaction.response.send_message("✅ Đã cập nhật: " + ", ".join(changes), ephemeral=True)
-            await send_log(self, interaction, f"Sửa `{a}`: " + "; ".join(changes))
+                updates.append(f"email=`{email}`")
+            if not updates:
+                return await interaction.followup.send("⚠️ Không có gì để sửa!")
+            await interaction.followup.send("✅ Đã sửa: " + ", ".join(updates))
+            await send_log(self, interaction, f"Sửa `{a}`: " + ", ".join(updates))
             await self.post_account_summary()
 
-        @self.tree.command(name="generate", description="⚙️ Tạo account")
+        @self.tree.command(name="generate", description="⚙️ Tạo tài khoản ngẫu nhiên")
         @app_commands.describe(amount="Số lượng", length="Độ dài")
         async def generate(interaction, amount: int = 1, length: int = 12):
+            await interaction.response.defer(ephemeral=True)
             if not (1 <= amount <= 20):
-                return await interaction.response.send_message("⚠️ 1–20!", ephemeral=True)
-            result = []
+                return await interaction.followup.send("⚠️ Giới hạn 1–20")
+            gen = []
             for _ in range(amount):
-                name = generate_name(length)
-                while name in self.accounts:
-                    name = generate_name(length)
-                self.accounts[name] = {"note": "generated", "otp": "", "email": ""}
-                save_account(name, "generated")
-                result.append(name)
-            await interaction.response.send_message("✅ Đã tạo:\n" + "\n".join(result), ephemeral=True)
-            await send_log(self, interaction, f"Tạo {amount} account")
+                a = generate_name(length)
+                while a in self.accounts:
+                    a = generate_name(length)
+                self.accounts[a] = {"note": "generated", "otp": "", "email": ""}
+                save_account(a, "generated")
+                gen.append(a)
+            await interaction.followup.send("✅ Đã tạo:\n" + "\n".join(gen))
+            await send_log(self, interaction, f"Tạo {len(gen)} tài khoản")
             await self.post_account_summary()
 
-        @self.tree.command(name="show", description="📋 Tìm kiếm tài khoản")
-        @app_commands.describe(account="Tên tài khoản hoặc từ khoá")
+        @self.tree.command(name="show", description="📋 Tìm tài khoản")
+        @app_commands.describe(account="Nhập tên hoặc từ khoá")
         async def show(interaction, account: str):
+            await interaction.response.defer(ephemeral=True)
             key = account.lower().strip()
             if not key:
-                return await interaction.response.send_message("⚠️ Nhập từ khoá!", ephemeral=True)
-            matches = [(a, info) for a, info in self.accounts.items() if key in a.lower()]
-            if matches:
-                if len(matches) == 1:
-                    a, i = matches[0]
-                    await interaction.response.send_message(
-                        f"🧾 **{a}**\n📝 {i.get('note','')}\n🔑 OTP: `{i.get('otp','')}`\n📧 Email: {i.get('email','')}",
+                return await interaction.followup.send("⚠️ Nhập từ khoá!")
+            matched = [(a, info) for a, info in self.accounts.items() if key in a.lower()]
+            if matched:
+                if len(matched) == 1:
+                    acc, info = matched[0]
+                    return await interaction.followup.send(
+                        f"📄 Account: `{acc}`\n🔑 OTP: `{info.get('otp','')}`"
+                    )
+                options = [discord.SelectOption(label=a) for a, _ in matched[:25]]
+                select = discord.ui.Select(placeholder="Chọn tài khoản", options=options)
+
+                async def cb(i: discord.Interaction):
+                    acc = select.values[0]
+                    info = self.accounts.get(acc, {})
+                    await i.response.send_message(
+                        f"📄 Account: `{acc}`\n🔑 OTP: `{info.get('otp','')}`",
                         ephemeral=True
                     )
-                else:
-                    opts = [discord.SelectOption(label=a) for a, _ in matches[:25]]
-                    select = discord.ui.Select(placeholder="Chọn", options=opts)
-                    async def cb(i): 
-                        sel = select.values[0]; info = self.accounts.get(sel, {})
-                        await i.response.send_message(
-                            f"🧾 **{sel}**\n📝 {info.get('note','')}\n🔑 OTP: `{info.get('otp','')}`\n📧 Email: {info.get('email','')}",
-                            ephemeral=True
-                        )
-                    select.callback = cb
-                    view = discord.ui.View(); view.add_item(select)
-                    await interaction.response.send_message("🔍 Kết quả tìm thấy:", view=view, ephemeral=True)
-                return
-            # Gợi ý gần đúng
-            suggestions = difflib.get_close_matches(key, list(self.accounts.keys()), n=5, cutoff=0.5)
-            if suggestions:
-                return await interaction.response.send_message(
-                    f"❌ Không tìm thấy `{account}`. Gợi ý:\n" + "\n".join(f"• {s}" for s in suggestions),
-                    ephemeral=True
+
+                select.callback = cb
+                view = discord.ui.View(); view.add_item(select)
+                return await interaction.followup.send("🔍 Chọn tài khoản:", view=view)
+            # Không tìm thấy → gợi ý gần đúng
+            suggest = difflib.get_close_matches(key, list(self.accounts.keys()), n=5, cutoff=0.5)
+            if suggest:
+                return await interaction.followup.send(
+                    f"❌ Không tìm thấy `{account}`\n🔎 Gợi ý:\n" + "\n".join(f"• {s}" for s in suggest)
                 )
-            await interaction.response.send_message("❌ Không tìm thấy và không có gợi ý.", ephemeral=True)
+            await interaction.followup.send("❌ Không tìm thấy và không có gợi ý.")
 
 bot = MyBot()
 
 @bot.event
 async def on_ready():
-    print(f"🤖 Bot online: {bot.user} (ID: {bot.user.id})")
+    print(f"🤖 Bot đã online: {bot.user} (ID: {bot.user.id})")
 
 if __name__ == "__main__":
     keep_alive()
