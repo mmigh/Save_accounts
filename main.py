@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import os, json, random, string, difflib, io
+import os, json, random, string, difflib
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
@@ -18,16 +18,15 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(json.loads(os.environ["
 client = gspread.authorize(creds)
 sheet = client.open(SHEET_NAME).sheet1
 
-# === Helper ===
 def read_accounts():
     accs = {}
     for row in sheet.get_all_records():
-        a = row.get("Account", "").strip()
+        a = str(row.get("Account", "")).strip()
         if not a: continue
         accs[a] = {
-            "note": row.get("Note", "").strip(),
-            "otp": row.get("otp", "").strip(),
-            "email": row.get("email", "").strip()
+            "note": str(row.get("Note", "")).strip(),
+            "otp": str(row.get("otp", "")).strip(),
+            "email": str(row.get("email", "")).strip()
         }
     return accs
 
@@ -59,7 +58,6 @@ async def send_log(bot, interaction, action):
         if ch:
             await ch.send(f"📝 `{interaction.user}` dùng lệnh `/{interaction.command.name}`\n📘 {action}")
 
-# === Bot class ===
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -81,27 +79,19 @@ class MyBot(commands.Bot):
 
     @tasks.loop(hours=10)
     async def post_account_summary(self):
-        if not ACCOUNT_NOTI_CHANNEL:
-            return
+        if not ACCOUNT_NOTI_CHANNEL: return
         ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
-        if not ch:
-            return
-
-        # Xoá tin nhắn cũ
+        if not ch: return
         try:
             async for msg in ch.history(limit=50):
                 if msg.author == self.user:
                     await msg.delete()
         except: pass
-
-        # Soạn nội dung mới
         lines = []
         for acc, info in self.accounts.items():
             otp = info.get("otp", "")
             chk = "✅" if otp else "❌"
             lines.append(f"`{acc}` | {info.get('note','')} | {chk}")
-
-        # Gửi từng chunk
         chunk = ""
         for line in lines:
             if len(chunk) + len(line) + 1 > 1900:
@@ -196,7 +186,10 @@ class MyBot(commands.Bot):
                 if len(matched) == 1:
                     acc, info = matched[0]
                     return await interaction.followup.send(
-                        f"📄 Account: `{acc}`\n🔑 OTP: `{info.get('otp','')}`"
+                        f"📄 Account: `{acc}`\n"
+                        f"📝 Note: `{info.get('note','')}`\n"
+                        f"🔑 OTP: `{info.get('otp','')}`\n"
+                        f"📧 Email: `{info.get('email','')}`"
                     )
                 options = [discord.SelectOption(label=a) for a, _ in matched[:25]]
                 select = discord.ui.Select(placeholder="Chọn tài khoản", options=options)
@@ -205,14 +198,16 @@ class MyBot(commands.Bot):
                     acc = select.values[0]
                     info = self.accounts.get(acc, {})
                     await i.response.send_message(
-                        f"📄 Account: `{acc}`\n🔑 OTP: `{info.get('otp','')}`",
+                        f"📄 Account: `{acc}`\n"
+                        f"📝 Note: `{info.get('note','')}`\n"
+                        f"🔑 OTP: `{info.get('otp','')}`\n"
+                        f"📧 Email: `{info.get('email','')}`",
                         ephemeral=True
                     )
 
                 select.callback = cb
                 view = discord.ui.View(); view.add_item(select)
                 return await interaction.followup.send("🔍 Chọn tài khoản:", view=view)
-            # Không tìm thấy → gợi ý gần đúng
             suggest = difflib.get_close_matches(key, list(self.accounts.keys()), n=5, cutoff=0.5)
             if suggest:
                 return await interaction.followup.send(
