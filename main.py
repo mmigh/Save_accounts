@@ -8,7 +8,7 @@ import string
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import io
-from keep_alive import keep_alive  # Xoá nếu không dùng
+from keep_alive import keep_alive  # Nếu không dùng, có thể xoá
 
 TOKEN = os.environ.get("TOKEN")
 SHEET_NAME = "RobloxAccounts"
@@ -67,7 +67,7 @@ def generate_roblox_username(length=12):
     random.shuffle(result)
     return ''.join(result)
 
-# === Bot Setup ===
+# === Bot ===
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -83,7 +83,7 @@ class MyBot(commands.Bot):
 
     async def register_commands(self):
         @self.tree.command(name="add", description="➕ Thêm tài khoản")
-        @app_commands.describe(account="Tên tài khoản", note="Ghi chú (tùy chọn)")
+        @app_commands.describe(account="Tên tài khoản", note="Ghi chú (tuỳ chọn)")
         async def add_account(interaction: discord.Interaction, account: str, note: str = ""):
             if account in self.accounts:
                 await interaction.response.send_message("⚠️ Đã tồn tại!", ephemeral=True)
@@ -127,7 +127,7 @@ class MyBot(commands.Bot):
             await interaction.response.send_message(f"🗑️ Đã xoá `{account}`", ephemeral=True)
 
         @self.tree.command(name="generate", description="⚙️ Tạo tài khoản ngẫu nhiên")
-        @app_commands.describe(amount="Số lượng", length="Độ dài tên")
+        @app_commands.describe(amount="Số lượng", length="Độ dài")
         async def generate_account(interaction: discord.Interaction, amount: int = 1, length: int = 12):
             if not (1 <= amount <= 20):
                 await interaction.response.send_message("⚠️ Giới hạn 1–20.", ephemeral=True)
@@ -147,14 +147,14 @@ class MyBot(commands.Bot):
         async def count_accounts(interaction: discord.Interaction):
             await interaction.response.send_message(f"📦 Tổng tài khoản: {len(self.accounts)}", ephemeral=True)
 
-        @self.tree.command(name="backup", description="💾 Sao lưu toàn bộ tài khoản")
+        @self.tree.command(name="backup", description="💾 Sao lưu tài khoản")
         async def backup(interaction: discord.Interaction):
             content = "\n".join(f"{acc} | {info['note']}" for acc, info in self.accounts.items())
             file = discord.File(io.BytesIO(content.encode()), filename="accounts_backup.txt")
             await interaction.response.send_message("📤 Dữ liệu sao lưu:", file=file, ephemeral=True)
 
-        @self.tree.command(name="restore", description="♻️ Khôi phục từ file .txt")
-        @app_commands.describe(file="Tệp .txt (1 dòng: account | note)")
+        @self.tree.command(name="restore", description="♻️ Khôi phục từ file")
+        @app_commands.describe(file="Tệp .txt (dạng: acc | note)")
         async def restore(interaction: discord.Interaction, file: discord.Attachment):
             if not file.filename.endswith(".txt"):
                 await interaction.response.send_message("⚠️ Chỉ hỗ trợ .txt", ephemeral=True)
@@ -173,7 +173,7 @@ class MyBot(commands.Bot):
                 self.accounts[acc] = {"note": note}
             await interaction.response.send_message(f"✅ Đã khôi phục {len(lines)} tài khoản!", ephemeral=True)
 
-        @self.tree.command(name="show", description="📋 Hiển thị thông tin tài khoản")
+        @self.tree.command(name="show", description="📋 Xem thông tin tài khoản")
         async def show(interaction: discord.Interaction):
             if not self.accounts:
                 await interaction.response.send_message("📭 Không có tài khoản nào!", ephemeral=True)
@@ -197,31 +197,28 @@ class MyBot(commands.Bot):
             view.add_item(select)
             await interaction.response.send_message("📚 Chọn tài khoản để xem:", view=view, ephemeral=True)
 
-        @self.tree.command(name="backup_and_clear_logcal", description="💣 Sao lưu và xoá toàn bộ logcal")
+        @self.tree.command(name="backup_and_clear_logcal", description="💣 Sao lưu & xoá cột logcal (E)")
         async def backup_and_clear_logcal(interaction: discord.Interaction):
-            values = sheet.col_values(5)[1:]  # Cột E (bỏ header)
+            values = sheet.col_values(5)[1:]  # Cột E (logcal), bỏ header
+            values = [v for v in values if v.strip()]
             if not values:
-               await interaction.response.send_message("📭 Không có logcal nào để xoá!", ephemeral=True)
-               return
-
-            content = "\n".join([v for v in values if v.strip()])
+                await interaction.response.send_message("📭 Không có logcal nào!", ephemeral=True)
+                return
+            content = "\n".join(values)
             file = discord.File(io.BytesIO(content.encode()), filename="logcal_backup.txt")
-
-    # Ghi rỗng vào từng ô logcal (cột 5)
-             for i in range(2, len(values) + 2):  # từ hàng 2 trở đi
+            for i in range(2, len(values) + 2):  # Hàng 2 trở đi
                 try:
-            sheet.update_cell(i, 5, "")
+                    sheet.update_cell(i, 5, "")
                 except:
-                pass
-    
-             await interaction.response.send_message("✅ Đã backup và xoá sạch logcal (chỉ cột E)!", file=file, ephemeral=True)
+                    pass
+            await interaction.response.send_message("✅ Đã backup và xoá logcal!", file=file, ephemeral=True)
 
 # === Run Bot ===
 bot = MyBot()
 
 @bot.event
 async def on_ready():
-    print(f"🤖 Bot đã khởi động: {bot.user} (ID: {bot.user.id})")
+    print(f"🤖 Bot đã khởi động: {bot.user}")
 
 if __name__ == "__main__":
     keep_alive()
