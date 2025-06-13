@@ -6,13 +6,13 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
 
-# === ENV ===
+# ENV
 TOKEN = os.environ.get("TOKEN")
-SHEET_NAME = "RobloxAccounts"
 ACCOUNT_NOTI_CHANNEL = int(os.environ.get("ACCOUNT_NOTI_CHANNEL", 0))
 NOTIFY_CHANNEL_ID = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))
+SHEET_NAME = "RobloxAccounts"
 
-# === Google Sheet setup ===
+# Google Sheets setup
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"]), scope)
 client = gspread.authorize(creds)
@@ -56,7 +56,7 @@ async def send_log(bot, interaction, action):
     if NOTIFY_CHANNEL_ID:
         ch = bot.get_channel(NOTIFY_CHANNEL_ID)
         if ch:
-            await ch.send(f"📝 `{interaction.user}` dùng lệnh `/{interaction.command.name}`\n📘 {action}")
+            await ch.send(f"📝 `{interaction.user}` dùng `/{interaction.command.name}`\n📘 {action}")
 
 class MyBot(commands.Bot):
     def __init__(self):
@@ -105,7 +105,10 @@ class MyBot(commands.Bot):
         @self.tree.command(name="add", description="➕ Thêm tài khoản")
         @app_commands.describe(account="Tên", note="Ghi chú")
         async def add(interaction, account: str, note: str = ""):
-            await interaction.response.defer(ephemeral=True)
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.NotFound:
+                return
             a = account.strip()
             if not a:
                 return await interaction.followup.send("⚠️ Nhập tên!")
@@ -120,7 +123,10 @@ class MyBot(commands.Bot):
         @self.tree.command(name="remove", description="❌ Xoá tài khoản")
         @app_commands.describe(account="Tên")
         async def remove(interaction, account: str):
-            await interaction.response.defer(ephemeral=True)
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.NotFound:
+                return
             a = account.strip()
             if a not in self.accounts:
                 return await interaction.followup.send("⚠️ Không tồn tại!")
@@ -133,7 +139,10 @@ class MyBot(commands.Bot):
         @self.tree.command(name="edit", description="✏️ Sửa tài khoản")
         @app_commands.describe(account="Tên", note="Note", otp="OTP", email="Email")
         async def edit(interaction, account: str, note: str = "", otp: str = "", email: str = ""):
-            await interaction.response.defer(ephemeral=True)
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.NotFound:
+                return
             a = account.strip()
             if a not in self.accounts:
                 return await interaction.followup.send("⚠️ Không tồn tại!")
@@ -159,7 +168,10 @@ class MyBot(commands.Bot):
         @self.tree.command(name="generate", description="⚙️ Tạo tài khoản ngẫu nhiên")
         @app_commands.describe(amount="Số lượng", length="Độ dài")
         async def generate(interaction, amount: int = 1, length: int = 12):
-            await interaction.response.defer(ephemeral=True)
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.NotFound:
+                return
             if not (1 <= amount <= 20):
                 return await interaction.followup.send("⚠️ Giới hạn 1–20")
             gen = []
@@ -177,7 +189,10 @@ class MyBot(commands.Bot):
         @self.tree.command(name="show", description="📋 Tìm tài khoản")
         @app_commands.describe(account="Nhập tên hoặc từ khoá")
         async def show(interaction, account: str):
-            await interaction.response.defer(ephemeral=True)
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except discord.NotFound:
+                return
             key = account.lower().strip()
             if not key:
                 return await interaction.followup.send("⚠️ Nhập từ khoá!")
