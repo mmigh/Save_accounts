@@ -23,8 +23,6 @@ class MyBot(commands.Bot):
 
     @tasks.loop(minutes=3)
     async def refresh_data(self):
-        self.accounts = read_accounts()
-        self.logcals = read_logcals()
 
     @tasks.loop(hours=5)
     async def update_embed_loop(self):
