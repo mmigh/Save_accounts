@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.swp
+
+# Môi trường ảo
+venv/
+.env
+env/
+
+# Token/API key
+credentials.json
+*.env
+*.secret
+*.key
+*.pem
+
+# VSCode
+.vscode/
+
+# Hệ điều hành
+.DS_Store
+Thumbs.db
+
+# Log
+*.log
+
+# Backup
+*.bak
+*.tmp
