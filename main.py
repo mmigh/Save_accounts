@@ -99,7 +99,7 @@ class MyBot(commands.Bot):
         for acc, info in self.accounts.items():
             otp = info.get("otp", "")
             chk = "✅" if otp else "❌"
-            lines.append(f"📄 `{acc}` | 🔑 `{otp}` {chk}")
+            lines.append(f"`{acc}` | {info.get('note','')} | {chk}")
 
         # Gửi từng chunk
         chunk = ""
