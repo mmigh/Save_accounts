@@ -198,23 +198,23 @@ class MyBot(commands.Bot):
             await interaction.response.send_message("📚 Chọn tài khoản để xem:", view=view, ephemeral=True)
 
         @self.tree.command(name="backup_and_clear_logcal", description="💣 Sao lưu và xoá toàn bộ logcal")
-async def backup_and_clear_logcal(interaction: discord.Interaction):
-    values = sheet.col_values(5)[1:]  # Cột E (bỏ header)
-    if not values:
-        await interaction.response.send_message("📭 Không có logcal nào để xoá!", ephemeral=True)
-        return
+        async def backup_and_clear_logcal(interaction: discord.Interaction):
+            values = sheet.col_values(5)[1:]  # Cột E (bỏ header)
+            if not values:
+               await interaction.response.send_message("📭 Không có logcal nào để xoá!", ephemeral=True)
+               return
 
-    content = "\n".join([v for v in values if v.strip()])
-    file = discord.File(io.BytesIO(content.encode()), filename="logcal_backup.txt")
+            content = "\n".join([v for v in values if v.strip()])
+            file = discord.File(io.BytesIO(content.encode()), filename="logcal_backup.txt")
 
     # Ghi rỗng vào từng ô logcal (cột 5)
-    for i in range(2, len(values) + 2):  # từ hàng 2 trở đi
-        try:
+             for i in range(2, len(values) + 2):  # từ hàng 2 trở đi
+                try:
             sheet.update_cell(i, 5, "")
-        except:
-            pass
-
-    await interaction.response.send_message("✅ Đã backup và xoá sạch logcal (chỉ cột E)!", file=file, ephemeral=True)
+                except:
+                pass
+    
+             await interaction.response.send_message("✅ Đã backup và xoá sạch logcal (chỉ cột E)!", file=file, ephemeral=True)
 
 # === Run Bot ===
 bot = MyBot()
