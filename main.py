@@ -57,7 +57,9 @@ async def send_log(bot, interaction, action):
 
 class MyBot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix="!", intents=discord.Intents.default())
+        intents = discord.Intents.default()
+        intents.message_content = True
+        super().__init__(command_prefix="!", intents=intents)
         self.accounts = {}
         self.sent_messages = {}
 
@@ -67,6 +69,7 @@ class MyBot(commands.Bot):
         await self.tree.sync()
         self.refresh_data.start()
         self.post_account_summary.start()
+        self.refresh_buttons.start()
 
     @tasks.loop(minutes=5)
     async def refresh_data(self):
@@ -83,35 +86,26 @@ class MyBot(commands.Bot):
         for acc, info in self.accounts.items():
             await self._send_account_line(ch, acc, info)
 
+    @tasks.loop(minutes=60)
+    async def refresh_buttons(self):
+        await self.post_account_summary()
+
     async def _send_account_line(self, ch, acc, info):
         note = info.get("note", "")
         otp = info.get("otp", "")
         chk = "✅" if otp else "❌"
         content = f"`{acc}` | {note} | {chk}"
 
-        class ShowButton(discord.ui.View):
-            def __init__(self):
-                super().__init__(timeout=None)  # ⏰ Không timeout
+        view = discord.ui.View(timeout=None)
+        async def cb(inter):
+            await inter.response.send_message(
+                f"📄 Account: `{acc}`\n📝 Note: `{note}`\n🔑 OTP: `{otp}`\n📧 Email: `{info.get('email','')}`",
+                ephemeral=True
+            )
+        btn = discord.ui.Button(label="📋 Xem", style=discord.ButtonStyle.secondary)
+        btn.callback = cb
+        view.add_item(btn)
 
-                btn = discord.ui.Button(label="📋 Xem", style=discord.ButtonStyle.secondary)
-                view = discord.ui.View(timeout=None)  # giữ button sống mãi
-                btn.callback = self.show_callback
-                self.add_item(btn)
-
-            async def show_callback(self, interaction: discord.Interaction):
-                data = ch._state._get_client().accounts.get(acc)
-                if not data:
-                    await interaction.response.send_message("⚠️ Tài khoản không còn tồn tại.", ephemeral=True)
-                    return
-                await interaction.response.send_message(
-                    f"📄 Account: `{acc}`\n"
-                    f"📝 Note: `{data.get('note','')}`\n"
-                    f"🔑 OTP: `{data.get('otp','')}`\n"
-                    f"📧 Email: `{data.get('email','')}`",
-                    ephemeral=True
-                )
-
-        view = ShowButton()
         msg = await ch.send(content, view=view)
         self.sent_messages[acc] = msg.id
 
@@ -216,6 +210,14 @@ class MyBot(commands.Bot):
             embed.add_field(name="🔑 OTP", value=info.get("otp", "-"), inline=False)
             embed.add_field(name="📧 Email", value=info.get("email", "-"), inline=False)
             await inter.followup.send(embed=embed, ephemeral=True)
+
+        @self.tree.command(name="refresh_now", description="🔄 Làm mới danh sách account ngay")
+        async def refresh_now(inter):
+            try: await inter.response.defer(ephemeral=True)
+            except discord.NotFound: return
+            await self.post_account_summary()
+            await inter.followup.send("✅ Đã làm mới danh sách tài khoản.")
+            await send_log(self, inter, "Làm mới ngay danh sách account")
 
 bot = MyBot()
 
