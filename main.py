@@ -91,18 +91,37 @@ class MyBot(commands.Bot):
                     except: pass
         except: pass
 
-        lines = [f"`{acc}` | {info.get('note','')} | {'✅' if info.get('otp') else '❌'}" for acc, info in self.accounts.items()]
-        chunks = []
-        current = ""
-        for line in lines:
-            if len(current) + len(line) + 1 > 1900:
+        done_lines = []
+        pending_lines = []
+
+        for acc, info in self.accounts.items():
+            line = f"`{acc}` | {info.get('note','')} | {'✅' if info.get('otp') else '❌'}"
+            if info.get("note", "").lower() == "done":
+                done_lines.append(line)
+            else:
+                pending_lines.append(line)
+
+        def split_chunks(lines):
+            chunks = []
+            current = ""
+            for line in lines:
+                if len(current) + len(line) + 1 > 1900:
+                    chunks.append(current)
+                    current = ""
+                current += line + "\n"
+            if current:
                 chunks.append(current)
-                current = ""
-            current += line + "\n"
-        if current:
-            chunks.append(current)
-        for chunk in chunks:
-            await channel.send(chunk if chunk else "Không có tài khoản nào.")
+            return chunks
+
+        if done_lines:
+            await channel.send("✅ **Đã hoàn tất:**")
+            for chunk in split_chunks(done_lines):
+                await channel.send(chunk)
+
+        if pending_lines:
+            await channel.send("📦 **Chưa hoàn tất:**")
+            for chunk in split_chunks(pending_lines):
+                await channel.send(chunk)
 
     async def _upsert_account_line(self, acc, info):
         ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
