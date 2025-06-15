@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import os, json, random, string, difflib
+import os, json, random, string
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
@@ -68,27 +68,55 @@ class MyBot(commands.Bot):
         await self.register_commands()
         await self.tree.sync()
         self.refresh_data.start()
-        self.post_account_summary.start()
-        self.refresh_buttons.start()
+        self.auto_send_loop.start()
 
     @tasks.loop(minutes=5)
     async def refresh_data(self):
         self.accounts = read_accounts()
 
     @tasks.loop(hours=10)
-    async def post_account_summary(self):
+    async def auto_send_loop(self):
+        await self.send_updated_account_message()
+
+    async def send_updated_account_message(self):
+        if not ACCOUNT_NOTI_CHANNEL:
+            return
+        channel = self.get_channel(ACCOUNT_NOTI_CHANNEL)
+        if not channel:
+            return
+        try:
+            async for m in channel.history(limit=20):
+                if m.author == self.user:
+                    try: await m.delete()
+                    except: pass
+        except: pass
+
+        lines = [f"`{acc}` | {info.get('note','')} | {'✅' if info.get('otp') else '❌'}" for acc, info in self.accounts.items()]
+        chunks = []
+        current = ""
+        for line in lines:
+            if len(current) + len(line) + 1 > 1900:
+                chunks.append(current)
+                current = ""
+            current += line + "\n"
+        if current:
+            chunks.append(current)
+        for chunk in chunks:
+            await channel.send(chunk if chunk else "Không có tài khoản nào.")
+
+    async def _upsert_account_line(self, acc, info):
         ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
         if not ch: return
-        for mid in list(self.sent_messages.values()):
-            try: await (await ch.fetch_message(mid)).delete()
-            except: pass
-        self.sent_messages.clear()
-        for acc, info in self.accounts.items():
-            await self._send_account_line(ch, acc, info)
+        await self._delete_account_line(acc)
+        await self._send_account_line(ch, acc, info)
 
-    @tasks.loop(minutes=60)
-    async def refresh_buttons(self):
-        await self.post_account_summary()
+    async def _delete_account_line(self, acc):
+        ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
+        if not ch or acc not in self.sent_messages: return
+        try:
+            msg = await ch.fetch_message(self.sent_messages.pop(acc))
+            await msg.delete()
+        except: pass
 
     async def _send_account_line(self, ch, acc, info):
         note = info.get("note", "")
@@ -108,20 +136,6 @@ class MyBot(commands.Bot):
 
         msg = await ch.send(content, view=view)
         self.sent_messages[acc] = msg.id
-
-    async def _upsert_account_line(self, acc, info):
-        ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
-        if not ch: return
-        await self._delete_account_line(acc)
-        await self._send_account_line(ch, acc, info)
-
-    async def _delete_account_line(self, acc):
-        ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
-        if not ch or acc not in self.sent_messages: return
-        try:
-            msg = await ch.fetch_message(self.sent_messages.pop(acc))
-            await msg.delete()
-        except: pass
 
     async def register_commands(self):
         @self.tree.command(name="add", description="➕ Thêm tài khoản")
@@ -215,7 +229,7 @@ class MyBot(commands.Bot):
         async def refresh_now(inter):
             try: await inter.response.defer(ephemeral=True)
             except discord.NotFound: return
-            await self.post_account_summary()
+            await self.send_updated_account_message()
             await inter.followup.send("✅ Đã làm mới danh sách tài khoản.")
             await send_log(self, inter, "Làm mới ngay danh sách account")
 
@@ -224,6 +238,25 @@ bot = MyBot()
 @bot.event
 async def on_ready():
     print(f"🤖 Bot online: {bot.user} (ID: {bot.user.id})")
+
+@bot.event
+async def on_message(message):
+    if message.author == bot.user or message.content.startswith("/"):
+        return
+    acc = message.content.strip().split()[0]
+    data = bot.accounts.get(acc)
+    if data:
+        try:
+            await message.reply(
+                f"📄 Account: `{acc}`\n"
+                f"📝 Note: `{data.get('note','')}`\n"
+                f"🔑 OTP: `{data.get('otp','')}`\n"
+                f"📧 Email: `{data.get('email','')}`"
+            )
+            await message.delete()
+        except:
+            pass
+    await bot.process_commands(message)
 
 if __name__ == "__main__":
     keep_alive()
