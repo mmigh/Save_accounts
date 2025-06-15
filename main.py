@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import os, json, random, string
+import os, json, random, string, asyncio
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
@@ -84,6 +84,7 @@ class MyBot(commands.Bot):
         channel = self.get_channel(ACCOUNT_NOTI_CHANNEL)
         if not channel:
             return
+
         try:
             async for m in channel.history(limit=20):
                 if m.author == self.user:
@@ -123,74 +124,46 @@ class MyBot(commands.Bot):
             for chunk in split_chunks(pending_lines):
                 await channel.send(chunk)
 
-    async def _upsert_account_line(self, acc, info):
-        ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
-        if not ch: return
-        await self._delete_account_line(acc)
-        await self._send_account_line(ch, acc, info)
-
-    async def _delete_account_line(self, acc):
-        ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
-        if not ch or acc not in self.sent_messages: return
-        try:
-            msg = await ch.fetch_message(self.sent_messages.pop(acc))
-            await msg.delete()
-        except: pass
-
-    async def _send_account_line(self, ch, acc, info):
-        note = info.get("note", "")
-        otp = info.get("otp", "")
-        chk = "✅" if otp else "❌"
-        content = f"`{acc}` | {note} | {chk}"
-
-        view = discord.ui.View(timeout=None)
-        async def cb(inter):
-            await inter.response.send_message(
-                f"📄 Account: `{acc}`\n📝 Note: `{note}`\n🔑 OTP: `{otp}`\n📧 Email: `{info.get('email','')}`",
-                ephemeral=True
-            )
-        btn = discord.ui.Button(label="📋 Xem", style=discord.ButtonStyle.secondary)
-        btn.callback = cb
-        view.add_item(btn)
-
-        msg = await ch.send(content, view=view)
-        self.sent_messages[acc] = msg.id
-
     async def register_commands(self):
         @self.tree.command(name="add", description="➕ Thêm tài khoản")
         @app_commands.describe(account="Tên", note="Ghi chú")
         async def add(inter, account: str, note: str = ""):
-            try: await inter.response.defer(ephemeral=True)
-            except discord.NotFound: return
+            await inter.response.defer(ephemeral=True)
             a = account.strip()
-            if not a: return await inter.followup.send("⚠️ Nhập tên!")
-            if a in self.accounts: return await inter.followup.send("⚠️ Đã tồn tại!")
+            if not a:
+                await inter.followup.send("⚠️ Nhập tên!")
+                return
+            if a in self.accounts:
+                await inter.followup.send("⚠️ Đã tồn tại!")
+                return
             self.accounts[a] = {"note": note, "otp": "", "email": ""}
             save_account(a, note)
-            await self._upsert_account_line(a, self.accounts[a])
             await inter.followup.send(f"✅ Đã thêm `{a}`")
             await send_log(self, inter, f"Thêm `{a}` | `{note}`")
+            await self.send_updated_account_message()
 
         @self.tree.command(name="remove", description="❌ Xoá tài khoản")
         @app_commands.describe(account="Tên")
         async def remove(inter, account: str):
-            try: await inter.response.defer(ephemeral=True)
-            except discord.NotFound: return
+            await inter.response.defer(ephemeral=True)
             a = account.strip()
-            if a not in self.accounts: return await inter.followup.send("⚠️ Không tồn tại!")
+            if a not in self.accounts:
+                await inter.followup.send("⚠️ Không tồn tại!")
+                return
             delete_account(a)
             del self.accounts[a]
-            await self._delete_account_line(a)
             await inter.followup.send(f"🗑️ Đã xoá `{a}`")
             await send_log(self, inter, f"Xoá `{a}`")
+            await self.send_updated_account_message()
 
         @self.tree.command(name="edit", description="✏️ Sửa tài khoản")
         @app_commands.describe(account="Tên", note="Ghi chú", otp="OTP", email="Email")
         async def edit(inter, account: str, note: str = "", otp: str = "", email: str = ""):
-            try: await inter.response.defer(ephemeral=True)
-            except discord.NotFound: return
+            await inter.response.defer(ephemeral=True)
             a = account.strip()
-            if a not in self.accounts: return await inter.followup.send("⚠️ Không tồn tại!")
+            if a not in self.accounts:
+                await inter.followup.send("⚠️ Không tồn tại!")
+                return
             changes = []
             if note:
                 self.accounts[a]["note"] = note
@@ -205,18 +178,19 @@ class MyBot(commands.Bot):
                 update_account_field(a, "email", email)
                 changes.append(f"email=`{email}`")
             if not changes:
-                return await inter.followup.send("⚠️ Không có gì để cập nhật.")
-            await self._upsert_account_line(a, self.accounts[a])
+                await inter.followup.send("⚠️ Không có gì để cập nhật.")
+                return
             await inter.followup.send("✅ Đã cập nhật: " + ", ".join(changes))
             await send_log(self, inter, f"Sửa `{a}`: " + ", ".join(changes))
+            await self.send_updated_account_message()
 
         @self.tree.command(name="generate", description="⚙️ Tạo tài khoản ngẫu nhiên")
         @app_commands.describe(amount="Số lượng", length="Độ dài")
         async def generate(inter, amount: int = 1, length: int = 12):
-            try: await inter.response.defer(ephemeral=True)
-            except discord.NotFound: return
+            await inter.response.defer(ephemeral=True)
             if not (1 <= amount <= 20):
-                return await inter.followup.send("⚠️ Giới hạn 1–20.")
+                await inter.followup.send("⚠️ Giới hạn 1–20.")
+                return
             gen = []
             for _ in range(amount):
                 a = generate_name(length)
@@ -224,39 +198,38 @@ class MyBot(commands.Bot):
                     a = generate_name(length)
                 self.accounts[a] = {"note": "generated", "otp": "", "email": ""}
                 save_account(a, "generated")
-                await self._upsert_account_line(a, self.accounts[a])
                 gen.append(a)
             await inter.followup.send("✅ Đã tạo:\n" + "\n".join(gen))
             await send_log(self, inter, f"Tạo {len(gen)} tài khoản")
+            await self.send_updated_account_message()
 
         @self.tree.command(name="show", description="📋 Xem chi tiết tài khoản")
         @app_commands.describe(account="Tên tài khoản")
         async def show(inter, account: str):
-            try: await inter.response.defer(ephemeral=True)
-            except discord.NotFound: return
+            await inter.response.defer(ephemeral=True)
             a = account.strip()
             info = self.accounts.get(a)
             if not info:
-                return await inter.followup.send("❌ Không tìm thấy tài khoản này.")
+                await inter.followup.send("❌ Không tìm thấy tài khoản này.")
+                return
             embed = discord.Embed(title=f"📄 Account: {a}", colour=discord.Color.blue())
             embed.add_field(name="📝 Note", value=info.get("note", "-"), inline=False)
             embed.add_field(name="🔑 OTP", value=info.get("otp", "-"), inline=False)
             embed.add_field(name="📧 Email", value=info.get("email", "-"), inline=False)
-            await inter.followup.send(embed=embed, ephemeral=True)
+            await inter.followup.send(embed=embed)
 
-        @self.tree.command(name="refresh_now", description="🔄 Làm mới danh sách account ngay")
+        @self.tree.command(name="refresh_now", description="🔄 Làm mới danh sách ngay")
         async def refresh_now(inter):
-            try: await inter.response.defer(ephemeral=True)
-            except discord.NotFound: return
+            await inter.response.defer(ephemeral=True)
             await self.send_updated_account_message()
-            await inter.followup.send("✅ Đã làm mới danh sách tài khoản.")
-            await send_log(self, inter, "Làm mới ngay danh sách account")
+            await inter.followup.send("✅ Đã làm mới.")
+            await send_log(self, inter, "Làm mới ngay danh sách")
 
 bot = MyBot()
 
 @bot.event
 async def on_ready():
-    print(f"🤖 Bot online: {bot.user} (ID: {bot.user.id})")
+    print(f"🤖 Bot sẵn sàng: {bot.user} (ID: {bot.user.id})")
 
 @bot.event
 async def on_message(message):
@@ -266,12 +239,14 @@ async def on_message(message):
     data = bot.accounts.get(acc)
     if data:
         try:
-            await message.reply(
+            reply = await message.reply(
                 f"📄 Account: `{acc}`\n"
                 f"📝 Note: `{data.get('note','')}`\n"
                 f"🔑 OTP: `{data.get('otp','')}`\n"
                 f"📧 Email: `{data.get('email','')}`"
             )
+            await asyncio.sleep(45)
+            await reply.delete()
             await message.delete()
         except:
             pass
