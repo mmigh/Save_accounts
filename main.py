@@ -6,19 +6,16 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
 
-# --- ENV ---
-TOKEN = os.environ.get("TOKEN")
+TOKEN = os.environ["TOKEN"]
 ACCOUNT_NOTI_CHANNEL = int(os.environ.get("ACCOUNT_NOTI_CHANNEL", 0))
 NOTIFY_CHANNEL_ID = int(os.environ.get("NOTIFY_CHANNEL_ID", 0))
 SHEET_NAME = "RobloxAccounts"
 
-# --- Google Sheets ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"]), scope)
 client = gspread.authorize(creds)
 sheet = client.open(SHEET_NAME).sheet1
 
-# --- Helpers ---
 def read_accounts():
     accs = {}
     for row in sheet.get_all_records():
@@ -49,22 +46,20 @@ def update_account_field(a, field, val):
 
 def generate_name(n=12):
     s = random.choice(string.ascii_uppercase) + random.choice(string.ascii_lowercase) + random.choice(string.digits)
-    s += ''.join(random.choices(string.ascii_letters + string.digits, k=n-3))
-    return ''.join(random.sample(s, len(s)))
+    s += "".join(random.choices(string.ascii_letters + string.digits, k=n - 3))
+    return "".join(random.sample(s, len(s)))
 
 async def send_log(bot, interaction, action):
     if NOTIFY_CHANNEL_ID:
         ch = bot.get_channel(NOTIFY_CHANNEL_ID)
         if ch:
-            await ch.send(f"📝 `{interaction.user}` dùng **/{interaction.command.name}**\n📘 {action}")
+            await ch.send(f"📝 `{interaction.user}` dùng lệnh `/{interaction.command.name}`\n📘 {action}")
 
-# --- Bot class ---
 class MyBot(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.default()
-        intents.message_content = True
-        super().__init__(command_prefix="!", intents=intents)
+        super().__init__(command_prefix="!", intents=discord.Intents.default())
         self.accounts = {}
+        self.sent_messages = {}
 
     async def setup_hook(self):
         self.accounts = read_accounts()
@@ -72,7 +67,6 @@ class MyBot(commands.Bot):
         await self.tree.sync()
         self.refresh_data.start()
         self.post_account_summary.start()
-        print("✅ Bot ready")
 
     @tasks.loop(minutes=5)
     async def refresh_data(self):
@@ -80,55 +74,47 @@ class MyBot(commands.Bot):
 
     @tasks.loop(hours=10)
     async def post_account_summary(self):
-        if not ACCOUNT_NOTI_CHANNEL: return
         ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
         if not ch: return
+        for mid in list(self.sent_messages.values()):
+            try: await (await ch.fetch_message(mid)).delete()
+            except: pass
+        self.sent_messages.clear()
+        for acc, info in self.accounts.items():
+            await self._send_account_line(ch, acc, info)
 
-        # Clean old bot messages
+    async def _send_account_line(self, ch, acc, info):
+        note = info.get("note", "")
+        otp = info.get("otp", "")
+        chk = "✅" if otp else "❌"
+        content = f"`{acc}` | {note} | {chk}"
+        btn = discord.ui.Button(label="📋 Xem", style=discord.ButtonStyle.secondary)
+        view = discord.ui.View()
+        async def cb(inter):
+            await inter.response.send_message(
+                f"📄 Account: `{acc}`\n📝 Note: `{note}`\n🔑 OTP: `{otp}`\n📧 Email: `{info.get('email','')}`",
+                ephemeral=True
+            )
+        btn.callback = cb
+        view.add_item(btn)
+        msg = await ch.send(content, view=view)
+        self.sent_messages[acc] = msg.id
+
+    async def _upsert_account_line(self, acc, info):
+        ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
+        if not ch: return
+        await self._delete_account_line(acc)
+        await self._send_account_line(ch, acc, info)
+
+    async def _delete_account_line(self, acc):
+        ch = self.get_channel(ACCOUNT_NOTI_CHANNEL)
+        if not ch or acc not in self.sent_messages: return
         try:
-            async for msg in ch.history(limit=50):
-                if msg.author == self.user:
-                    await msg.delete()
+            msg = await ch.fetch_message(self.sent_messages.pop(acc))
+            await msg.delete()
         except: pass
 
-        # Build groups
-        done_lines, other_lines = [], []
-        for acc, info in self.accounts.items():
-            note = (info.get("note","") or "").strip().lower()
-            otp = info.get("otp","")
-            chk = "✅" if otp else "❌"
-            text = f"`{acc}` | {info.get('note','')} | {chk}"
-            btn = discord.ui.Button(label="📋 Xem", style=discord.ButtonStyle.secondary, custom_id=f"btn_show_{acc}")
-            view = discord.ui.View()
-            async def btn_cb(inter, a=acc):
-                info_i = self.accounts.get(a,{})
-                await inter.response.send_message(
-                    f"📄 Account: `{a}`\n"
-                    f"📝 Note: `{info_i.get('note','')}`\n"
-                    f"🔑 OTP: `{info_i.get('otp','')}`\n"
-                    f"📧 Email: `{info_i.get('email','')}`",
-                    ephemeral=True
-                )
-            btn.callback = btn_cb
-            view.add_item(btn)
-
-            if note == "done":
-                done_lines.append((text, view))
-            else:
-                other_lines.append((text, view))
-
-        # Send messages
-        if done_lines:
-            await ch.send("📂 ✅ **Đã xong:**")
-            for t,v in done_lines:
-                await ch.send(t, view=v)
-        if other_lines:
-            await ch.send("📂 📦 **Chưa xong / Xử lý:**")
-            for t,v in other_lines:
-                await ch.send(t, view=v)
-
     async def register_commands(self):
-        # --- /add ---
         @self.tree.command(name="add", description="➕ Thêm tài khoản")
         @app_commands.describe(account="Tên", note="Ghi chú")
         async def add(inter, account: str, note: str = ""):
@@ -139,12 +125,11 @@ class MyBot(commands.Bot):
             if a in self.accounts: return await inter.followup.send("⚠️ Đã tồn tại!")
             self.accounts[a] = {"note": note, "otp": "", "email": ""}
             save_account(a, note)
+            await self._upsert_account_line(a, self.accounts[a])
             await inter.followup.send(f"✅ Đã thêm `{a}`")
             await send_log(self, inter, f"Thêm `{a}` | `{note}`")
-            await self.post_account_summary()
 
-        # --- /remove ---
-        @self.tree.command(name="remove", description="❌ Xóa tài khoản")
+        @self.tree.command(name="remove", description="❌ Xoá tài khoản")
         @app_commands.describe(account="Tên")
         async def remove(inter, account: str):
             try: await inter.response.defer(ephemeral=True)
@@ -153,11 +138,10 @@ class MyBot(commands.Bot):
             if a not in self.accounts: return await inter.followup.send("⚠️ Không tồn tại!")
             delete_account(a)
             del self.accounts[a]
-            await inter.followup.send(f"🗑️ Đã xóa `{a}`")
-            await send_log(self, inter, f"Xóa `{a}`")
-            await self.post_account_summary()
+            await self._delete_account_line(a)
+            await inter.followup.send(f"🗑️ Đã xoá `{a}`")
+            await send_log(self, inter, f"Xoá `{a}`")
 
-        # --- /edit ---
         @self.tree.command(name="edit", description="✏️ Sửa tài khoản")
         @app_commands.describe(account="Tên", note="Ghi chú", otp="OTP", email="Email")
         async def edit(inter, account: str, note: str = "", otp: str = "", email: str = ""):
@@ -178,19 +162,19 @@ class MyBot(commands.Bot):
                 self.accounts[a]["email"] = email
                 update_account_field(a, "email", email)
                 changes.append(f"email=`{email}`")
-            if not changes: return await inter.followup.send("⚠️ Không có gì để sửa!")
-            await inter.followup.send(f"✅ Đã sửa: {', '.join(changes)}")
-            await send_log(self, inter, f"Sửa `{a}`: {', '.join(changes)}")
-            await self.post_account_summary()
+            if not changes:
+                return await inter.followup.send("⚠️ Không có gì để cập nhật.")
+            await self._upsert_account_line(a, self.accounts[a])
+            await inter.followup.send("✅ Đã cập nhật: " + ", ".join(changes))
+            await send_log(self, inter, f"Sửa `{a}`: " + ", ".join(changes))
 
-        # --- /generate ---
         @self.tree.command(name="generate", description="⚙️ Tạo tài khoản ngẫu nhiên")
         @app_commands.describe(amount="Số lượng", length="Độ dài")
         async def generate(inter, amount: int = 1, length: int = 12):
             try: await inter.response.defer(ephemeral=True)
             except discord.NotFound: return
-            if not 1 <= amount <= 20:
-                return await inter.followup.send("⚠️ Giới hạn 1–20")
+            if not (1 <= amount <= 20):
+                return await inter.followup.send("⚠️ Giới hạn 1–20.")
             gen = []
             for _ in range(amount):
                 a = generate_name(length)
@@ -198,12 +182,11 @@ class MyBot(commands.Bot):
                     a = generate_name(length)
                 self.accounts[a] = {"note": "generated", "otp": "", "email": ""}
                 save_account(a, "generated")
+                await self._upsert_account_line(a, self.accounts[a])
                 gen.append(a)
-            await inter.followup.send(f"✅ Đã tạo:\n" + "\n".join(gen))
-            await send_log(self, inter, f"Tạo {len(gen)} account")
-            await self.post_account_summary()
+            await inter.followup.send("✅ Đã tạo:\n" + "\n".join(gen))
+            await send_log(self, inter, f"Tạo {len(gen)} tài khoản")
 
-        # --- /show ---
         @self.tree.command(name="show", description="📋 Xem chi tiết tài khoản")
         @app_commands.describe(account="Tên tài khoản")
         async def show(inter, account: str):
@@ -214,12 +197,11 @@ class MyBot(commands.Bot):
             if not info:
                 return await inter.followup.send("❌ Không tìm thấy tài khoản này.")
             embed = discord.Embed(title=f"📄 Account: {a}", colour=discord.Color.blue())
-            embed.add_field(name="📝 Note", value=info.get("note","-"), inline=False)
-            embed.add_field(name="🔑 OTP", value=info.get("otp","-"), inline=False)
-            embed.add_field(name="📧 Email", value=info.get("email","-"), inline=False)
+            embed.add_field(name="📝 Note", value=info.get("note", "-"), inline=False)
+            embed.add_field(name="🔑 OTP", value=info.get("otp", "-"), inline=False)
+            embed.add_field(name="📧 Email", value=info.get("email", "-"), inline=False)
             await inter.followup.send(embed=embed, ephemeral=True)
 
-# --- Run Bot ---
 bot = MyBot()
 
 @bot.event
