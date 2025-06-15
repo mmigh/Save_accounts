@@ -94,6 +94,7 @@ class MyBot(commands.Bot):
                 super().__init__(timeout=None)  # ⏰ Không timeout
 
                 btn = discord.ui.Button(label="📋 Xem", style=discord.ButtonStyle.secondary)
+                view = discord.ui.View(timeout=None)  # giữ button sống mãi
                 btn.callback = self.show_callback
                 self.add_item(btn)
 
