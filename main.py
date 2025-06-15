@@ -88,15 +88,29 @@ class MyBot(commands.Bot):
         otp = info.get("otp", "")
         chk = "✅" if otp else "❌"
         content = f"`{acc}` | {note} | {chk}"
-        btn = discord.ui.Button(label="📋 Xem", style=discord.ButtonStyle.secondary)
-        view = discord.ui.View()
-        async def cb(inter):
-            await inter.response.send_message(
-                f"📄 Account: `{acc}`\n📝 Note: `{note}`\n🔑 OTP: `{otp}`\n📧 Email: `{info.get('email','')}`",
-                ephemeral=True
-            )
-        btn.callback = cb
-        view.add_item(btn)
+
+        class ShowButton(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=None)  # ⏰ Không timeout
+
+                btn = discord.ui.Button(label="📋 Xem", style=discord.ButtonStyle.secondary)
+                btn.callback = self.show_callback
+                self.add_item(btn)
+
+            async def show_callback(self, interaction: discord.Interaction):
+                data = ch._state._get_client().accounts.get(acc)
+                if not data:
+                    await interaction.response.send_message("⚠️ Tài khoản không còn tồn tại.", ephemeral=True)
+                    return
+                await interaction.response.send_message(
+                    f"📄 Account: `{acc}`\n"
+                    f"📝 Note: `{data.get('note','')}`\n"
+                    f"🔑 OTP: `{data.get('otp','')}`\n"
+                    f"📧 Email: `{data.get('email','')}`",
+                    ephemeral=True
+                )
+
+        view = ShowButton()
         msg = await ch.send(content, view=view)
         self.sent_messages[acc] = msg.id
 
