@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import os, json, random, string, asyncio
+import os, json, random, string, asyncio, time
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from keep_alive import keep_alive
@@ -61,7 +61,6 @@ class MyBot(commands.Bot):
         intents.message_content = True
         super().__init__(command_prefix="!", intents=intents)
         self.accounts = {}
-        self.sent_messages = {}
 
     async def setup_hook(self):
         self.accounts = read_accounts()
@@ -84,7 +83,6 @@ class MyBot(commands.Bot):
         channel = self.get_channel(ACCOUNT_NOTI_CHANNEL)
         if not channel:
             return
-
         try:
             async for m in channel.history(limit=20):
                 if m.author == self.user:
@@ -103,15 +101,13 @@ class MyBot(commands.Bot):
                 pending_lines.append(line)
 
         def split_chunks(lines):
-            chunks = []
-            current = ""
+            chunks, current = [], ""
             for line in lines:
                 if len(current) + len(line) + 1 > 1900:
                     chunks.append(current)
                     current = ""
                 current += line + "\n"
-            if current:
-                chunks.append(current)
+            if current: chunks.append(current)
             return chunks
 
         if done_lines:
@@ -123,6 +119,10 @@ class MyBot(commands.Bot):
             await channel.send("📦 **Chưa hoàn tất:**")
             for chunk in split_chunks(pending_lines):
                 await channel.send(chunk)
+
+        # Hiển thị thời gian cập nhật kế tiếp
+        timestamp = int(time.time()) + 36000
+        await channel.send(f"⏳ Danh sách sẽ được cập nhật lại <t:{timestamp}:R>")
 
     async def register_commands(self):
         @self.tree.command(name="add", description="➕ Thêm tài khoản")
@@ -239,11 +239,13 @@ async def on_message(message):
     data = bot.accounts.get(acc)
     if data:
         try:
+            expire = int(time.time()) + 45
             reply = await message.reply(
                 f"📄 Account: `{acc}`\n"
                 f"📝 Note: `{data.get('note','')}`\n"
                 f"🔑 OTP: `{data.get('otp','')}`\n"
-                f"📧 Email: `{data.get('email','')}`"
+                f"📧 Email: `{data.get('email','')}`\n"
+                f"⏳ Sẽ bị xoá <t:{expire}:R>"
             )
             await asyncio.sleep(45)
             await reply.delete()
