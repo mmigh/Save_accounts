@@ -219,11 +219,15 @@ class MyBot(commands.Bot):
             await inter.followup.send(embed=embed)
 
         @self.tree.command(name="refresh_now", description="🔄 Làm mới danh sách ngay")
-        async def refresh_now(inter):
-            await inter.response.defer(ephemeral=True)
-            await self.send_updated_account_message()
-            await inter.followup.send("✅ Đã làm mới.")
-            await send_log(self, inter, "Làm mới ngay danh sách")
+async def refresh_now(inter):
+    await inter.response.defer(ephemeral=True)
+    try:
+        await self.send_updated_account_message()
+    except Exception as e:
+        await inter.followup.send("❌ Có lỗi xảy ra khi làm mới: " + str(e))
+        return
+    await inter.followup.send("✅ Đã làm mới.")
+    await send_log(self, inter, "Làm mới ngay danh sách")
 
 bot = MyBot()
 
