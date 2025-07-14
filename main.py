@@ -222,17 +222,6 @@ class MyBot(commands.Bot):
             embed.add_field(name="📧 Email", value=info.get("email", "-"), inline=False)
             await inter.followup.send(embed=embed)
 
-        @self.tree.command(name="refresh_now", description="🔄 Làm mới danh sách ngay")
-        async def refresh_now(inter):
-            await inter.response.defer(ephemeral=True)
-            try:
-                await self.send_updated_account_message()
-            except Exception as e:
-                await inter.followup.send("❌ Có lỗi xảy ra khi làm mới: " + str(e))
-                return
-            await inter.followup.send("✅ Đã làm mới.")
-            await send_log(self, inter, "Làm mới ngay danh sách")
-
 bot = MyBot()
 
 @bot.event
