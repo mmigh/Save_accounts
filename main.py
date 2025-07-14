@@ -184,7 +184,7 @@ class MyBot(commands.Bot):
             if not changes:
                 await inter.followup.send("⚠️ Không có gì để cập nhật.")
                 return
-            await inter.followup.send("✅ Đã cập nhật: " + ", ".join(changes))
+            await inter.followup.send("✅ Đã cập nhật:"+",".join(changes))
             await send_log(self, inter, f"Sửa `{a}`: " + ", ".join(changes))
             await self.send_updated_account_message()
 
