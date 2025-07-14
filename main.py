@@ -203,9 +203,7 @@ class MyBot(commands.Bot):
                 self.accounts[a] = {"note": "generated", "otp": "", "email": ""}
                 save_account(a, "generated")
                 gen.append(a)
-            await inter.followup.send("✅ Đã tạo:
-" + "
-".join(gen))
+            await inter.followup.send("✅ Đã tạo:\n" + "\n".join(gen))
             await send_log(self, inter, f"Tạo {len(gen)} tài khoản")
             await self.send_updated_account_message()
 
